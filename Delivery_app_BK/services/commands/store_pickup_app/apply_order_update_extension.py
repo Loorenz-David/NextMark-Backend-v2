@@ -1,0 +1,19 @@
+"""Store Pickup App - Order Update Extension Handler (no-op).
+
+Store pickup plans do not require custom order update processing.
+"""
+
+from ...context import ServiceContext
+from ..order.update_extensions.types import OrderUpdateDelta, OrderUpdateExtensionContext, OrderUpdateExtensionResult
+
+
+def apply_order_update_extension(
+    ctx: ServiceContext,
+    order_deltas: list[OrderUpdateDelta],
+    extension_context: OrderUpdateExtensionContext,
+) -> OrderUpdateExtensionResult:
+    """Store pickup plans don't require order update processing.
+    
+    Returns an empty result.
+    """
+    return OrderUpdateExtensionResult()

@@ -1,0 +1,139 @@
+from Delivery_app_BK.services.domain.order.order_events import OrderEvent
+from Delivery_app_BK.services.infra.events.event_bus import EventBus
+from Delivery_app_BK.services.infra.events.handlers.order.order_email import (
+    send_email_on_client_form_link_sent,
+    send_email_on_order_cancelled,
+    send_email_on_order_completed,
+    send_email_on_order_confirmed,
+    send_email_on_order_created,
+    send_email_on_order_delivery_plan_changed,
+    send_email_on_order_delivery_rescheduled,
+    send_email_on_order_delivery_window_rescheduled_by_user,
+    send_email_on_order_fail,
+    send_email_on_order_preparing,
+    send_email_on_order_processing,
+    send_email_on_order_ready,
+)
+from Delivery_app_BK.services.infra.events.handlers.order.order_shopify import (
+    sync_shopify_fulfillment_on_order_completed,
+)
+from Delivery_app_BK.services.infra.events.handlers.order.order_sms import (
+    send_sms_on_client_form_link_sent,
+    send_sms_on_order_cancelled,
+    send_sms_on_order_completed,
+    send_sms_on_order_confirmed,
+    send_sms_on_order_created,
+    send_sms_on_order_delivery_plan_changed,
+    send_sms_on_order_delivery_rescheduled,
+    send_sms_on_order_delivery_window_rescheduled_by_user,
+    send_sms_on_order_fail,
+    send_sms_on_order_preparing,
+    send_sms_on_order_processing,
+    send_sms_on_order_ready,
+)
+
+
+def register_order_event_handlers(event_bus: EventBus) -> None:
+    event_bus.register(
+        OrderEvent.CREATED.value,
+        send_sms_on_order_created,
+    )
+    event_bus.register(
+        OrderEvent.CREATED.value,
+        send_email_on_order_created,
+    )
+
+    event_bus.register(
+        OrderEvent.CONFIRMED.value,
+        send_sms_on_order_confirmed,
+    )
+    event_bus.register(
+        OrderEvent.CONFIRMED.value,
+        send_email_on_order_confirmed,
+    )
+    event_bus.register(
+        OrderEvent.PREPARING.value,
+        send_sms_on_order_preparing,
+    )
+    event_bus.register(
+        OrderEvent.PREPARING.value,
+        send_email_on_order_preparing,
+    )
+    event_bus.register(
+        OrderEvent.READY.value,
+        send_sms_on_order_ready,
+    )
+    event_bus.register(
+        OrderEvent.READY.value,
+        send_email_on_order_ready,
+    )
+    event_bus.register(
+        OrderEvent.PROCESSING.value,
+        send_sms_on_order_processing,
+    )
+    event_bus.register(
+        OrderEvent.PROCESSING.value,
+        send_email_on_order_processing,
+    )
+    event_bus.register(
+        OrderEvent.FAIL.value,
+        send_sms_on_order_fail,
+    )
+    event_bus.register(
+        OrderEvent.FAIL.value,
+        send_email_on_order_fail,
+    )
+    event_bus.register(
+        OrderEvent.CANCELLED.value,
+        send_sms_on_order_cancelled,
+    )
+    event_bus.register(
+        OrderEvent.CANCELLED.value,
+        send_email_on_order_cancelled,
+    )
+    event_bus.register(
+        OrderEvent.COMPLETED.value,
+        send_sms_on_order_completed,
+    )
+    event_bus.register(
+        OrderEvent.COMPLETED.value,
+        send_email_on_order_completed,
+    )
+    event_bus.register(
+        OrderEvent.COMPLETED.value,
+        sync_shopify_fulfillment_on_order_completed,
+    )
+
+    event_bus.register(
+        OrderEvent.DELIVERY_WINDOW_RESCHEDULED_BY_USER.value,
+        send_sms_on_order_delivery_window_rescheduled_by_user,
+    )
+    event_bus.register(
+        OrderEvent.DELIVERY_WINDOW_RESCHEDULED_BY_USER.value,
+        send_email_on_order_delivery_window_rescheduled_by_user,
+    )
+    event_bus.register(
+        OrderEvent.DELIVERY_PLAN_CHANGED.value,
+        send_sms_on_order_delivery_plan_changed,
+    )
+    event_bus.register(
+        OrderEvent.DELIVERY_PLAN_CHANGED.value,
+        send_email_on_order_delivery_plan_changed,
+    )
+    event_bus.register(
+        OrderEvent.DELIVERY_RESCHEDULED.value,
+        send_sms_on_order_delivery_rescheduled,
+    )
+    event_bus.register(
+        OrderEvent.DELIVERY_RESCHEDULED.value,
+        send_email_on_order_delivery_rescheduled,
+    )
+
+    event_bus.register(
+        OrderEvent.CLIENT_FORM_LINK_SENT.value,
+        send_sms_on_client_form_link_sent,
+    )
+    event_bus.register(
+        OrderEvent.CLIENT_FORM_LINK_SENT.value,
+        send_email_on_client_form_link_sent,
+    )

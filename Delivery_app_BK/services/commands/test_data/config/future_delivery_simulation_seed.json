@@ -1,0 +1,263 @@
+ {
+  "_meta": {
+    "name": "future-delivery-simulation-stockholm",
+    "notes": "Portable seed payload. Optionally provide DRIVER_ID, START_FACILITY_ID, END_FACILITY_ID, and zone_ids before running."
+  },
+  "route_plan": [
+    {
+      "$id": "plan.future.stockholm.2026-04-03",
+      "label": "Future Deliveries Stockholm 2026-04-03",
+      "date_strategy": "single",
+      "start_date": "2026-04-03T00:00:00Z",
+      "end_date": "2026-04-03T23:59:59Z",
+      "zone_ids": [],
+      "route_group_defaults": {
+        "name": "Stockholm Future Bucket",
+        "route_solution": {
+          "set_start_time": "09:00",
+          "set_end_time": "18:00",
+          "eta_tolerance_seconds": 1800,
+          "route_end_strategy": "round_trip"
+        }
+      }
+    }
+  ],
+  "order": [
+    {
+      "$route_plan": "plan.future.stockholm.2026-04-03",
+      "order_plan_objective": "local_delivery",
+      "operation_type": "dropoff",
+      "reference_number": "STK-FUT-001",
+      "client_first_name": "Anna",
+      "client_last_name": "Lind",
+      "client_email": "anna.lind+seed1@example.com",
+      "client_primary_phone": {"prefix": "+46", "number": "701111001"},
+      "client_address": {
+        "street_address": "Sveavagen 52",
+        "postal_code": "11134",
+        "city": "Stockholm",
+        "country": "Sweden",
+        "coordinates": {"lat": 59.3380, "lng": 18.0587}
+      },
+      "items": [
+        {"article_number": "A-001", "item_type": "Sofa", "quantity": 1, "weight": 15000, "dimension_height": 100, "dimension_width": 200, "dimension_depth": 80},
+        {"article_number": "A-002", "item_type": "Lamp", "quantity": 2, "weight": 2000, "dimension_height": 170, "dimension_width": 40, "dimension_depth": 40}
+      ],
+      "delivery_windows": [
+        {"start_at": "2026-04-03T09:00:00Z", "end_at": "2026-04-03T11:00:00Z", "window_type": "FULL_RANGE"}
+      ]
+    },
+    {
+      "$route_plan": "plan.future.stockholm.2026-04-03",
+      "order_plan_objective": "local_delivery",
+      "operation_type": "dropoff",
+      "reference_number": "STK-FUT-002",
+      "client_first_name": "Erik",
+      "client_last_name": "Holm",
+      "client_email": "erik.holm+seed2@example.com",
+      "client_primary_phone": {"prefix": "+46", "number": "701111002"},
+      "client_address": {
+        "street_address": "Odengatan 61",
+        "postal_code": "11322",
+        "city": "Stockholm",
+        "country": "Sweden",
+        "coordinates": {"lat": 59.3445, "lng": 18.0458}
+      },
+      "items": [
+        {"article_number": "B-001", "item_type": "Dining chair", "quantity": 4, "weight": 5000, "dimension_height": 100, "dimension_width": 55, "dimension_depth": 55}
+      ],
+      "delivery_windows": [
+        {"start_at": "2026-04-03T10:00:00Z", "end_at": "2026-04-03T12:30:00Z", "window_type": "FULL_RANGE"}
+      ]
+    },
+    {
+      "$route_plan": "plan.future.stockholm.2026-04-03",
+      "order_plan_objective": "local_delivery",
+      "operation_type": "dropoff",
+      "reference_number": "STK-FUT-003",
+      "client_first_name": "Sara",
+      "client_last_name": "Nordin",
+      "client_email": "sara.nordin+seed3@example.com",
+      "client_primary_phone": {"prefix": "+46", "number": "701111003"},
+      "client_address": {
+        "street_address": "Valhallavagen 145",
+        "postal_code": "11531",
+        "city": "Stockholm",
+        "country": "Sweden",
+        "coordinates": {"lat": 59.3478, "lng": 18.0895}
+      },
+      "items": [
+        {"article_number": "C-001", "item_type": "Bookshelf", "quantity": 1, "weight": 8000, "dimension_height": 170, "dimension_width": 60, "dimension_depth": 50}
+      ],
+      "delivery_windows": [
+        {"start_at": "2026-04-03T11:00:00Z", "end_at": "2026-04-03T13:00:00Z", "window_type": "FULL_RANGE"}
+      ]
+    },
+    {
+      "$route_plan": "plan.future.stockholm.2026-04-03",
+      "order_plan_objective": "local_delivery",
+      "operation_type": "dropoff",
+      "reference_number": "STK-FUT-004",
+      "client_first_name": "Johan",
+      "client_last_name": "Berg",
+      "client_email": "johan.berg+seed4@example.com",
+      "client_primary_phone": {"prefix": "+46", "number": "701111004"},
+      "client_address": {
+        "street_address": "Gotalandsgatan 67",
+        "postal_code": "11665",
+        "city": "Stockholm",
+        "country": "Sweden",
+        "coordinates": {"lat": 59.3098, "lng": 18.0786}
+      },
+      "items": [
+        {"article_number": "D-001", "item_type": "Coffee table", "quantity": 1, "weight": 5000, "dimension_height": 60, "dimension_width": 100, "dimension_depth": 50},
+        {"article_number": "D-002", "item_type": "Mirrors", "quantity": 1, "weight": 5000, "dimension_height": 80, "dimension_width": 60, "dimension_depth": 5}
+      ],
+      "delivery_windows": [
+        {"start_at": "2026-04-03T12:00:00Z", "end_at": "2026-04-03T14:00:00Z", "window_type": "FULL_RANGE"}
+      ]
+    },
+    {
+      "$route_plan": "plan.future.stockholm.2026-04-03",
+      "order_plan_objective": "local_delivery",
+      "operation_type": "dropoff",
+      "reference_number": "STK-FUT-005",
+      "client_first_name": "Maria",
+      "client_last_name": "Ek",
+      "client_email": "maria.ek+seed5@example.com",
+      "client_primary_phone": {"prefix": "+46", "number": "701111005"},
+      "client_address": {
+        "street_address": "Hantverkargatan 29",
+        "postal_code": "11221",
+        "city": "Stockholm",
+        "country": "Sweden",
+        "coordinates": {"lat": 59.3317, "lng": 18.0332}
+      },
+      "items": [
+        {"article_number": "E-001", "item_type": "Dining tables", "quantity": 1, "weight": 15000, "dimension_height": 140, "dimension_width": 100, "dimension_depth": 55}
+      ],
+      "delivery_windows": [
+        {"start_at": "2026-04-03T13:00:00Z", "end_at": "2026-04-03T15:00:00Z", "window_type": "FULL_RANGE"}
+      ]
+    },
+    {
+      "$route_plan": "plan.future.stockholm.2026-04-03",
+      "order_plan_objective": "local_delivery",
+      "operation_type": "dropoff",
+      "reference_number": "STK-FUT-006",
+      "client_first_name": "Lina",
+      "client_last_name": "Soder",
+      "client_email": "lina.soder+seed6@example.com",
+      "client_primary_phone": {"prefix": "+46", "number": "701111006"},
+      "client_address": {
+        "street_address": "Drottninggatan 96",
+        "postal_code": "11136",
+        "city": "Stockholm",
+        "country": "Sweden",
+        "coordinates": {"lat": 59.3366, "lng": 18.0590}
+      },
+      "items": [
+        {"article_number": "F-001", "item_type": "Sideboard", "quantity": 1, "weight": 30000, "dimension_height": 120, "dimension_width": 60, "dimension_depth": 50},
+        {"article_number": "F-002", "item_type": "Poster", "quantity": 3, "weight": 500, "dimension_height": 100, "dimension_width": 100, "dimension_depth": 100}
+      ],
+      "delivery_windows": [
+        {"start_at": "2026-04-03T14:00:00Z", "end_at": "2026-04-03T16:00:00Z", "window_type": "FULL_RANGE"}
+      ]
+    },
+    {
+      "$route_plan": "plan.future.stockholm.2026-04-03",
+      "order_plan_objective": "local_delivery",
+      "operation_type": "dropoff",
+      "reference_number": "STK-FUT-007",
+      "client_first_name": "Oskar",
+      "client_last_name": "Nyberg",
+      "client_email": "oskar.nyberg+seed7@example.com",
+      "client_primary_phone": {"prefix": "+46", "number": "701111007"},
+      "client_address": {
+        "street_address": "Ringvagen 100",
+        "postal_code": "11860",
+        "city": "Stockholm",
+        "country": "Sweden",
+        "coordinates": {"lat": 59.3071, "lng": 18.0830}
+      },
+      "items": [
+        {"article_number": "G-001", "item_type": "Bedside table", "quantity": 2, "weight": 4000, "dimension_height": 50, "dimension_width": 60, "dimension_depth": 50}
+      ],
+      "delivery_windows": [
+        {"start_at": "2026-04-03T09:30:00Z", "end_at": "2026-04-03T11:30:00Z", "window_type": "FULL_RANGE"}
+      ]
+    },
+    {
+      "$route_plan": "plan.future.stockholm.2026-04-03",
+      "order_plan_objective": "local_delivery",
+      "operation_type": "dropoff",
+      "reference_number": "STK-FUT-008",
+      "client_first_name": "Elin",
+      "client_last_name": "Wik",
+      "client_email": "elin.wik+seed8@example.com",
+      "client_primary_phone": {"prefix": "+46", "number": "701111008"},
+      "client_address": {
+        "street_address": "Norrlandsgatan 12",
+        "postal_code": "11143",
+        "city": "Stockholm",
+        "country": "Sweden",
+        "coordinates": {"lat": 59.3344, "lng": 18.0721}
+      },
+      "items": [
+        {"article_number": "H-001", "item_type": "Armchairs", "quantity": 1, "weight": 10000, "dimension_height": 160, "dimension_width": 60, "dimension_depth": 50},
+        {"article_number": "H-002", "item_type": "Small tables", "quantity": 2, "weight": 5000, "dimension_height": 50, "dimension_width": 50, "dimension_depth": 50}
+      ],
+      "delivery_windows": [
+        {"start_at": "2026-04-03T15:00:00Z", "end_at": "2026-04-03T17:00:00Z", "window_type": "FULL_RANGE"}
+      ]
+    },
+    {
+      "$route_plan": "plan.future.stockholm.2026-04-03",
+      "order_plan_objective": "local_delivery",
+      "operation_type": "dropoff",
+      "reference_number": "STK-FUT-009",
+      "client_first_name": "Karl",
+      "client_last_name": "Asplund",
+      "client_email": "karl.asplund+seed9@example.com",
+      "client_primary_phone": {"prefix": "+46", "number": "701111009"},
+      "client_address": {
+        "street_address": "Birger Jarlsgatan 57",
+        "postal_code": "11356",
+        "city": "Stockholm",
+        "country": "Sweden",
+        "coordinates": {"lat": 59.3421, "lng": 18.0749}
+      },
+      "items": [
+        {"article_number": "I-001", "item_type": "Chest of drawers", "quantity": 1, "weight": 10000, "dimension_height": 160, "dimension_width": 60, "dimension_depth": 50}
+      ],
+      "delivery_windows": [
+        {"start_at": "2026-04-03T11:30:00Z", "end_at": "2026-04-03T13:30:00Z", "window_type": "FULL_RANGE"}
+      ]
+    },
+    {
+      "$route_plan": "plan.future.stockholm.2026-04-03",
+      "order_plan_objective": "local_delivery",
+      "operation_type": "dropoff",
+      "reference_number": "STK-FUT-010",
+      "client_first_name": "Nora",
+      "client_last_name": "Blom",
+      "client_email": "nora.blom+seed10@example.com",
+      "client_primary_phone": {"prefix": "+46", "number": "701111010"},
+      "client_address": {
+        "street_address": "Torsgatan 37",
+        "postal_code": "11362",
+        "city": "Stockholm",
+        "country": "Sweden",
+        "coordinates": {"lat": 59.3437, "lng": 18.0381}
+      },
+      "items": [
+        {"article_number": "J-001", "item_type": "Sofa tables", "quantity": 1, "weight": 5000, "dimension_height": 60, "dimension_width": 100, "dimension_depth": 50},
+        {"article_number": "J-002", "item_type": "Nest of tables", "quantity": 1, "weight": 2000, "dimension_height": 50, "dimension_width": 50, "dimension_depth": 50}
+      ],
+      "delivery_windows": [
+        {"start_at": "2026-04-03T16:00:00Z", "end_at": "2026-04-03T18:00:00Z", "window_type": "FULL_RANGE"}
+      ]
+    }
+  ],
+  "order_zone_assignment": []
+}

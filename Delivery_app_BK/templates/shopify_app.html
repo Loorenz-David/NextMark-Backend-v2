@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Beyo Delivery App</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    .container {
+      background: #1e293b;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 6px 14px;
+      background: #22c55e;
+      color: #052e16;
+      font-weight: 600;
+      border-radius: 999px;
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0 0 15px;
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    p {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #cbd5e1;
+      margin-bottom: 30px;
+    }
+
+    .features {
+      text-align: left;
+      margin-bottom: 30px;
+    }
+
+    .feature {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
+    .feature span {
+      margin-right: 8px;
+      color: #38bdf8;
+    }
+
+    .button {
+      display: inline-block;
+      padding: 12px 22px;
+      background: #2563eb;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: background 0.2s ease;
+    }
+
+    .button:hover {
+      background: #1d4ed8;
+    }
+
+    .footer {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">Beyo Delivery</div>
+    <div class="status-badge">Installed Successfully</div>
+
+    <h1>Your Shopify store is now connected</h1>
+    <p>
+      Beyo Delivery App is now active and ready to automatically process your Shopify orders,
+      manage deliveries, and sync tracking data in real time.
+    </p>
+
+    <div class="features">
+      <div class="feature"><span>✓</span> Automatic order import</div>
+      <div class="feature"><span>✓</span> Delivery management</div>
+      <div class="feature"><span>✓</span> Real-time status updates</div>
+      <div class="feature"><span>✓</span> Smart facility workflow</div>
+    </div>
+
+    <a href="{{front_url}}" class="button">Open Beyo Dashboard</a>
+
+    <div class="footer">
+      If you have any questions, contact support or check your dashboard settings.
+    </div>
+  </div>
+</body>
+</html>

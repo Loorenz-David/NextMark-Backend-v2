@@ -1,0 +1,2 @@
+worker-default: python redis_worker_default.py
+worker-io: python redis_worker_io.py

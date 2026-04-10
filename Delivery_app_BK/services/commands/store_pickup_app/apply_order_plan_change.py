@@ -1,0 +1,21 @@
+"""Store Pickup App - Order Plan Change Handler (no-op).
+
+Store pickup plans do not require custom plan change processing.
+"""
+
+from ...context import ServiceContext
+from ..order.plan_changes.types import PlanChangeApplyContext, PlanChangeResult
+
+
+def apply_order_plan_change(
+    ctx: ServiceContext,
+    order_instance,
+    old_plan,
+    new_plan,
+    apply_context: PlanChangeApplyContext,
+) -> PlanChangeResult:
+    """Store pickup plans don't require plan change processing.
+    
+    Returns an empty result.
+    """
+    return PlanChangeResult()
