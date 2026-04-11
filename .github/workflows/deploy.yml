@@ -10,6 +10,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: deployment to ec2
 
     steps:
       - name: SSH deploy
