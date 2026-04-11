@@ -136,6 +136,8 @@ def create_app(config_name="development"):
 
         return health_status, (200 if overall_ok else 503)
 
+        
+    return app
 
 def _initialize_socketio(app: Flask, frontend_origins: list[str]) -> None:
     redis_uri = app.config.get("REDIS_URI", "")
@@ -164,3 +166,6 @@ def _initialize_socketio(app: Flask, frontend_origins: list[str]) -> None:
             exc,
         )
         socketio.init_app(app, **socketio_kwargs)
+
+
+    
