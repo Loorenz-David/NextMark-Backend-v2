@@ -1,6 +1,6 @@
 import json
 
-from Delivery_app_BK.lib.secrets import google_credentials as module
+from Delivery_app_BK.lib import google_credentials as module
 
 
 class _FakeSecretsClient:

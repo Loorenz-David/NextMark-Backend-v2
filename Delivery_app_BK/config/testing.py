@@ -1,9 +1,7 @@
 from Delivery_app_BK.config.default import Config
 import os
 from datetime import timedelta
-from dotenv import load_dotenv
 
-load_dotenv()
 
 class TestingConfig(Config):
     TESTING = True

@@ -30,10 +30,17 @@ jobs:
             pip install -r requirements.txt
 
             set -a
-            source .env
+            source /home/ubuntu/config/nextmark/.env
             set +a
 
             export FLASK_APP=cli:app
             flask db upgrade
 
             sudo systemctl restart nextmark-*
+            sleep 3
+            response=$(curl -s http://localhost:5050/)
+            echo "$response"
+            echo "$response" | grep '"status":"ok"' || exit 1
+
+            echo "Performing external health check for ssl domain delivery.beyoworkaroundtheclock ..."
+            curl -f https://delivery.beyoworkaroundtheclock.com || exit 1

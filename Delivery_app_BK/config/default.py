@@ -44,3 +44,19 @@ class Config:
     AI_PROPOSAL_APPLY_IDEMPOTENCY_TTL_SECONDS = int(
         os.environ.get("AI_PROPOSAL_APPLY_IDEMPOTENCY_TTL_SECONDS", str(60 * 60 * 24 * 30))
     )
+
+
+
+def resolve_env_path(config_name: str) -> str | None:
+    if config_name == "production":
+        env_path = "/home/ubuntu/config/nextmark/.env"
+    else:
+        env_path = ".env"
+
+    if os.path.exists(env_path):
+        return env_path
+
+    if config_name == "production":
+        raise RuntimeError(f"Missing required env file at {env_path}")
+
+    return None

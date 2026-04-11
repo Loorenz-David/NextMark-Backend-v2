@@ -16,7 +16,7 @@ from google.maps import routing_v2
 
 
 
-from Delivery_app_BK.lib.secrets.google_credentials import (
+from Delivery_app_BK.lib.google_credentials import (
     get_google_credentials_dict,
 )
 

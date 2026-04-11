@@ -22,7 +22,7 @@ from Delivery_app_BK.route_optimization.providers.google.mapper import (
 from google.oauth2 import service_account
 from google.maps import routeoptimization_v1
 
-from Delivery_app_BK.lib.secrets.google_credentials import (
+from Delivery_app_BK.lib.google_credentials import (
     get_google_credentials_dict,
 )
 

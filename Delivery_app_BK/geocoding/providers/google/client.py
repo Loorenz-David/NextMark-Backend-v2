@@ -8,7 +8,7 @@ from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.geocoding.domain.models import GeocodeRequest, GeocodeResult
 from Delivery_app_BK.geocoding.providers.base import GeocodingProvider
 from Delivery_app_BK.geocoding.providers.google.mapper import GoogleGeocodingResponseMapper
-from Delivery_app_BK.lib.secrets.google_credentials import get_google_geocoding_api_key
+from Delivery_app_BK.lib.google_credentials import get_google_geocoding_api_key
 
 logger = logging.getLogger(__name__)
 

@@ -21,7 +21,7 @@ from Delivery_app_BK.routers.utils.decompress_request import decompress_request
 from Delivery_app_BK.models import db
 from Delivery_app_BK.routers.utils.jwt_handler import jwt
 from Delivery_app_BK.services.infra.redis import assert_redis_available, describe_redis_uri
-
+from Delivery_app_BK.config.default import resolve_env_path
 
 # configuration map
 config_map = {
@@ -34,6 +34,10 @@ config_map = {
 
 # app factory
 def create_app(config_name="development"):
+    env_path = resolve_env_path(config_name)
+    if env_path:
+        from dotenv import load_dotenv
+        load_dotenv(env_path, override=True )
 
     app = Flask(__name__)
     
