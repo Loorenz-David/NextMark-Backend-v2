@@ -19,7 +19,7 @@ def _configure_logging() -> None:
         level=log_level,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
-
+ 
 
 def main() -> None:
     _configure_logging()
