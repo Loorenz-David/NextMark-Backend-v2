@@ -3,10 +3,12 @@
 set -e
 
 echo "Pulling latest code..."
-git pull origin main
+git fetch origin
+git reset --hard origin/main
+            
 
 echo "Activating venv..."
-source .venv/bin/activate
+source venv/bin/activate
 
 echo "Installing dependencies..."
 pip install -r requirements.txt

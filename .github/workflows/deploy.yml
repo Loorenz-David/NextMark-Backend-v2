@@ -20,14 +20,20 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
             cd /var/www/nextmark-backend
             echo "Resetting repo..."
             git fetch origin
             git reset --hard origin/main
+
             source venv/bin/activate
             pip install -r requirements.txt
+
             set -a
             source .env
             set +a
+
+            export FLASK_APP=application.py   
             flask db upgrade
+
             sudo systemctl restart nextmark-*
