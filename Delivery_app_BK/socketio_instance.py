@@ -11,3 +11,4 @@ socketio = SocketIO(async_mode="eventlet",
                     cors_allowed_origins="*",
                    
                     )
+ 
