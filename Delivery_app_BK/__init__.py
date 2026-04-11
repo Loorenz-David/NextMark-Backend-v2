@@ -100,13 +100,45 @@ def create_app(config_name="development"):
 
     @app.route("/", methods=["GET"])
     def health():
-        return {"status": "ok"}, 200
+        from sqlalchemy import text
+        from Delivery_app_BK.services.infra.redis import assert_redis_available
 
-    return app
+        health_status = {
+            "status": "ok",
+            "services": {}
+        }
+
+        overall_ok = True
+
+        # --- Database check ---
+        try:
+            db.session.execute(text("SELECT 1"))
+            health_status["services"]["db"] = "ok"
+        except Exception as e:
+            health_status["services"]["db"] = f"error: {str(e)}"
+            overall_ok = False
+
+        # --- Redis check ---
+        # --- Redis check ---
+        try:
+            redis_uri = app.config.get("REDIS_URI", "")
+            if not redis_uri:
+                raise RuntimeError("REDIS_URI not configured")
+
+            assert_redis_available(redis_uri)
+            health_status["services"]["redis"] = "ok"
+        except Exception as e:
+            health_status["services"]["redis"] = f"error: {str(e)}"
+            overall_ok = False
+
+        # --- Final status ---
+        health_status["status"] = "ok" if overall_ok else "degraded"
+
+        return health_status, (200 if overall_ok else 503)
 
 
 def _initialize_socketio(app: Flask, frontend_origins: list[str]) -> None:
-    redis_uri = app.config.get("REDIS_URI")
+    redis_uri = app.config.get("REDIS_URI", "")
     socketio_kwargs = {
         "cors_allowed_origins": frontend_origins,
     }

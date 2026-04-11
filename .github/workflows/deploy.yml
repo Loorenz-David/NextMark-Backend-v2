@@ -1,0 +1,30 @@
+# .github/workflows/deploy.yml
+
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /var/www/nextmark-backend
+            git pull origin main
+            source .venv/bin/activate
+            pip install -r requirements.txt
+            set -a
+            source .env
+            set +a
+            flask db upgrade
+            sudo systemctl restart nextmark-*
