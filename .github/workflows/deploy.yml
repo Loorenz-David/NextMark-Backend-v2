@@ -33,7 +33,7 @@ jobs:
             source .env
             set +a
 
-            export FLASK_APP=application.py   
+            export FLASK_APP=application.py:application
             flask db upgrade
 
             sudo systemctl restart nextmark-*

@@ -19,7 +19,8 @@ source .env
 set +a
 
 echo "Running migrations..."
-export FLASK_APP=application.py
+export FLASK_APP=application.py:application
+
 flask db upgrade
 
 echo "Reloading services..."
