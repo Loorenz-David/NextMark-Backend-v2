@@ -45,6 +45,7 @@ def _load_blueprints():
     from .user_role import user_role_bp
     from .user_role_rule import user_role_rule_bp
     from .zones import zone_bp
+    from .notifications import notifications_bp
 
     admin_blueprints = [
         item_bp,
@@ -77,6 +78,7 @@ def _load_blueprints():
         client_form_bp,
         ai_bp,
         zone_bp,
+        notifications_bp,
     ]
 
     return {
@@ -120,6 +122,7 @@ def _load_blueprints():
             "client_form_bp": client_form_bp,
             "ai_bp": ai_bp,
             "zone_bp": zone_bp,
+            "notifications_bp": notifications_bp,
             "public_client_form_bp": public_client_form_bp,
             "public_order_tracking_bp": public_order_tracking_bp,
         },
@@ -145,7 +148,7 @@ def register_v2_blueprints(app):
     app.register_blueprint(bp["local_delivery_plans_bp"], url_prefix="/api_v2/local_delivery_plans")
     app.register_blueprint(bp["label_template_bp"], url_prefix="/api_v2/label_templates")
     app.register_blueprint(bp["message_template_bp"], url_prefix="/api_v2/message_templates")
-    app.register_blueprint(bp["plan_bp"], url_prefix="/api_v2/plans")
+    app.register_blueprint(bp["plan_bp"], url_prefix="/api_v2/route_plans")
     app.register_blueprint(bp["order_bp"], url_prefix="/api_v2/orders")
     app.register_blueprint(bp["order_assignment_bp"], url_prefix="/api_v2/order_assignments")
     app.register_blueprint(bp["infrastructure_bp"], url_prefix="/api_v2/infrastructures")
@@ -165,7 +168,7 @@ def register_v2_blueprints(app):
     app.register_blueprint(bp["twilio_bp"], url_prefix="/api_v2/twilio")
     app.register_blueprint(bp["email_bp"], url_prefix="/api_v2/email")
     app.register_blueprint(bp["route_operations_bp"], url_prefix="/api_v2/route_operations")
-    app.register_blueprint(bp["plan_overviews_bp"], url_prefix="/api_v2/plan_overviews")
+    app.register_blueprint(bp["plan_overviews_bp"], url_prefix="/api_v2/route_plan_overviews")
     app.register_blueprint(bp["costumer_bp"], url_prefix="/api_v2/costumers")
     app.register_blueprint(bp["drivers_bp"], url_prefix="/api_v2/drivers")
     app.register_blueprint(bp["client_form_bp"], url_prefix="/api_v2")
@@ -173,3 +176,4 @@ def register_v2_blueprints(app):
     app.register_blueprint(bp["public_order_tracking_bp"], url_prefix="/api_v2")
     app.register_blueprint(bp["ai_bp"], url_prefix="/api_v2/ai")
     app.register_blueprint(bp["zone_bp"], url_prefix="/api_v2/zones")
+    app.register_blueprint(bp["notifications_bp"], url_prefix="/api_v2/notifications")

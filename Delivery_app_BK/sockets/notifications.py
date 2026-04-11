@@ -18,6 +18,7 @@ from Delivery_app_BK.models import (
     db,
 )
 from Delivery_app_BK.services.domain.user import ADMIN_APP_SCOPE, DRIVER_APP_SCOPE
+from Delivery_app_BK.services.infra.web_push.sender import send_web_push_to_users
 from Delivery_app_BK.services.domain.order.order_states import OrderState as OrderStateDomain, OrderStateId
 from Delivery_app_BK.services.infra.redis import (
     add_unread_notification,
@@ -579,6 +580,24 @@ def _store_and_emit_notification(user_id: int, app_scope: str, notification: dic
         },
         room=build_user_app_room(user_id, app_scope),
     )
+    if app_scope == ADMIN_APP_SCOPE:
+        target = notification.get("target")
+        if isinstance(target, dict):
+            try:
+                send_web_push_to_users(
+                    user_ids=[user_id],
+                    title=notification.get("title", "New update"),
+                    description=notification.get("description", ""),
+                    notification_id=notification.get("notification_id", ""),
+                    occurred_at=notification.get("occurred_at", ""),
+                    target=target,
+                )
+            except Exception:
+                current_app.logger.exception(
+                    "web push delivery failed | notification_id=%s user_id=%s",
+                    notification.get("notification_id"),
+                    user_id,
+                )
 
 
 def _build_notification_id(*, event_id: str, recipient_user_id: int, app_scope: str) -> str:

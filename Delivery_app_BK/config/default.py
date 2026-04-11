@@ -45,6 +45,13 @@ class Config:
         os.environ.get("AI_PROPOSAL_APPLY_IDEMPOTENCY_TTL_SECONDS", str(60 * 60 * 24 * 30))
     )
 
+    # ------------------------------------------------------------------
+    # Web Push (VAPID)
+    # ------------------------------------------------------------------
+    WEB_PUSH_VAPID_PUBLIC_KEY = os.environ.get("WEB_PUSH_VAPID_PUBLIC_KEY")
+    WEB_PUSH_VAPID_PRIVATE_KEY = os.environ.get("WEB_PUSH_VAPID_PRIVATE_KEY")
+    WEB_PUSH_VAPID_SUBJECT = os.environ.get("WEB_PUSH_VAPID_SUBJECT", "mailto:admin@nextmark.app")
+
 
 
 def resolve_env_path(config_name: str) -> str | None:

@@ -67,3 +67,4 @@ from .tables.zones.zone_version import ZoneVersion
 from .tables.zones.zone import Zone
 from .tables.zones.zone_template import ZoneTemplate
 from .tables.zones.order_zone_assignment import OrderZoneAssignment
+from .tables.notifications.push_subscription import PushSubscription

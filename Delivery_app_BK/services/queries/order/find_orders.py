@@ -90,8 +90,8 @@ def find_orders (
             "join": Order.delivery_plan,
         },
         "plan_type": {
-            "column": DeliveryPlan.plan_type,
-            "join": Order.delivery_plan,
+            "column": Order.order_plan_objective,
+            "join": None,
         },
     }
 

@@ -2,7 +2,7 @@
 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import Index, text, JSON, UniqueConstraint
-from sqlalchemy.orm import relationship, validates
+from sqlalchemy.orm import relationship, synonym, validates
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Float
 
 from datetime import datetime, timezone
@@ -83,9 +83,15 @@ class Order(
         ForeignKey("order_state.id", ondelete="SET NULL")
     )
     
-    delivery_plan_id = Column(
+    route_plan_id = Column(
         Integer,
         ForeignKey("route_plan.id", ondelete="SET NULL"),
+    )
+    route_group_id = Column(
+        Integer,
+        ForeignKey("route_group.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     costumer_id = Column(
         Integer,
@@ -98,6 +104,7 @@ class Order(
 
     # Client-form secure link fields
     client_form_token_hash = Column(String(64), unique=True, nullable=True, index=True)
+    client_form_token_encrypted = Column(String, nullable=True)
     client_form_token_expires_at = Column(UTCDateTime, nullable=True)
     client_form_submitted_at = Column(UTCDateTime, nullable=True)
 
@@ -146,8 +153,18 @@ class Order(
     route_plan = relationship(
         "RoutePlan",
         back_populates="orders",
-        foreign_keys=[delivery_plan_id],
+        foreign_keys=[route_plan_id],
     )
+
+    route_group = relationship(
+        "RouteGroup",
+        lazy="selectin",
+        foreign_keys=[route_group_id],
+    )
+
+    # Compatibility alias while legacy code still references delivery_plan_id.
+    delivery_plan_id = synonym("route_plan_id")
+    delivery_plan = synonym("route_plan")
 
     costumer = relationship(
         "Costumer",
