@@ -1,6 +1,9 @@
 from datetime import datetime
 
 from Delivery_app_BK.models import DeliveryPlan, Order
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    normalize_order_plan_objective,
+)
 from Delivery_app_BK.services.domain.order.order_events import OrderEvent
 from Delivery_app_BK.services.domain.order.order_states import (
     OrderState as OrderStateDomain,
@@ -83,6 +86,7 @@ def build_delivery_plan_changed_event(
     old_plan_id: int | None,
     new_plan: DeliveryPlan,
 ) -> dict:
+    new_plan_type = normalize_order_plan_objective(order_instance.order_plan_objective)
     return {
         "order_id": order_instance.id,
         "team_id": order_instance.team_id,
@@ -90,7 +94,7 @@ def build_delivery_plan_changed_event(
         "payload": {
             "old_delivery_plan_id": old_plan_id,
             "new_delivery_plan_id": new_plan.id,
-            "new_plan_type": new_plan.plan_type,
+            "new_plan_type": new_plan_type,
         },
     }
 

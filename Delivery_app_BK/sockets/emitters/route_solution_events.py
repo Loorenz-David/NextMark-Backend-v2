@@ -1,6 +1,9 @@
 from flask import current_app
 
 from Delivery_app_BK.models import RouteSolution, RouteGroup, db
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    resolve_route_plan_workflow_type,
+)
 from Delivery_app_BK.services.domain.delivery_plan.plan.route_freshness import get_route_freshness_updated_at
 from Delivery_app_BK.sockets.contracts.realtime import (
     BUSINESS_EVENT_ROUTE_SOLUTION_CREATED,
@@ -10,7 +13,6 @@ from Delivery_app_BK.sockets.contracts.realtime import (
 from Delivery_app_BK.sockets.emitters.common import build_business_event_envelope, emit_business_event
 from Delivery_app_BK.sockets.notifications import notify_delivery_planning_event
 from Delivery_app_BK.sockets.rooms.names import build_team_admin_room, build_team_members_room
-
 
 def emit_route_solution_created(route_solution: RouteSolution, *, payload: dict | None = None) -> None:
     """Emit RouteSolution created event. Broadcast to team_orders (admin visibility) and team_members (driver notification)."""
@@ -43,7 +45,7 @@ def emit_route_solution_created(route_solution: RouteSolution, *, payload: dict 
             **_plan_id_aliases(route_group_id=route_group_id, route_plan_id=route_plan_id),
             "label": route_solution.label,
             "plan_label": route_group.route_plan.label if route_group.route_plan else None,
-            "plan_type": route_group.route_plan.plan_type if route_group.route_plan else None,
+            "plan_type": resolve_route_plan_workflow_type(),
             "route_freshness_updated_at": get_route_freshness_updated_at(route_group.route_plan),
             "is_selected": route_solution.is_selected,
             "driver_id": route_solution.driver_id,
@@ -106,7 +108,7 @@ def emit_route_solution_updated(route_solution: RouteSolution, *, payload: dict 
             **_plan_id_aliases(route_group_id=route_group_id, route_plan_id=route_plan_id),
             "label": route_solution.label,
             "plan_label": route_group.route_plan.label if route_group.route_plan else None,
-            "plan_type": route_group.route_plan.plan_type if route_group.route_plan else None,
+            "plan_type": resolve_route_plan_workflow_type(),
             "route_freshness_updated_at": get_route_freshness_updated_at(route_group.route_plan),
             "is_selected": route_solution.is_selected,
             "driver_id": route_solution.driver_id,

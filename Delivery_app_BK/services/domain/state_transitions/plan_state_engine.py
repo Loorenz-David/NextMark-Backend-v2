@@ -58,16 +58,16 @@ def derive_auto_complete_state(route_group: "RouteGroup | None") -> int | None:
 
 
 def get_selected_route_solution(plan: "RoutePlan") -> "RouteSolution | None":
-    """Return the selected RouteSolution for a local_delivery plan, or None."""
-    local = getattr(plan, "local_delivery", None)
-    if local is None:
-        return None
-
-    route_solutions = getattr(local, "route_solutions", None) or []
-    selected = next((rs for rs in route_solutions if rs.is_selected), None)
-    if selected is None and route_solutions:
-        selected = route_solutions[0]
-    return selected
+    """Return the first selected RouteSolution across the plan's route groups."""
+    route_groups = list(getattr(plan, "route_groups", None) or [])
+    for route_group in route_groups:
+        route_solutions = getattr(route_group, "route_solutions", None) or []
+        selected = next((rs for rs in route_solutions if rs.is_selected), None)
+        if selected is not None:
+            return selected
+        if route_solutions:
+            return route_solutions[0]
+    return None
 
 
 def should_reset_plan_to_open(current_state_id: int | None) -> bool:
@@ -100,7 +100,7 @@ def maybe_auto_complete_plan(plan: "RoutePlan") -> bool:
     Must be called *after* `recompute_plan_order_counts`.
     Returns True when the plan was transitioned.
     """
-    if plan is None or getattr(plan, "plan_type", None) != "local_delivery":
+    if plan is None:
         return False
 
     # Allows manual completion flows where orders are marked completed

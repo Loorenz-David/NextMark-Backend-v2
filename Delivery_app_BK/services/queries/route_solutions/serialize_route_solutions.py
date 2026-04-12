@@ -1,6 +1,9 @@
 from typing import List
 
 from Delivery_app_BK.models import RouteSolution
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    resolve_route_plan_workflow_type,
+)
 from ...context import ServiceContext
 from ..utils import map_return_values
 
@@ -50,7 +53,7 @@ def serialize_route_solution(instance: RouteSolution) -> dict:
         "route_plan_id": getattr(route_group, "route_plan_id", None),
         "plan_label": getattr(route_plan, "label", None),
         "date_strategy": getattr(route_plan, "date_strategy", None),
-        "plan_type": getattr(route_plan, "plan_type", None),
+        "plan_type": resolve_route_plan_workflow_type() if route_plan is not None else None,
         "created_at": created_at.isoformat() if created_at else None,
         "updated_at": instance.updated_at.isoformat() if instance.updated_at else None,
     }
@@ -70,7 +73,7 @@ def serialize_route_solution_partial(instance: RouteSolution) -> dict:
         "driver_name": getattr(driver, "username", None),
         "plan_label": getattr(route_plan, "label", None),
         "date_strategy": getattr(route_plan, "date_strategy", None),
-        "plan_type": getattr(route_plan, "plan_type", None),
+        "plan_type": resolve_route_plan_workflow_type() if route_plan is not None else None,
         "score": instance.score,
         "total_distance_meters": instance.total_distance_meters,
         "total_travel_time_seconds": instance.total_travel_time_seconds,

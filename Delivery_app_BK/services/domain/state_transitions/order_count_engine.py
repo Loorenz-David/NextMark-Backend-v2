@@ -14,6 +14,9 @@ import logging
 from typing import TYPE_CHECKING, Callable, Any
 
 from Delivery_app_BK.models import RoutePlan, RouteSolution, Order, OrderState, db
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    resolve_route_plan_workflow_type,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,29 +83,15 @@ def recompute_route_solution_order_counts(route_solution: "RouteSolution") -> No
 PlanCountHandler = Callable[["RoutePlan"], None]
 
 def _recompute_local_delivery_counts(plan: "RoutePlan") -> None:
-    """Find the selected route solution for this local delivery plan and recompute."""
-    local = getattr(plan, "local_delivery", None)
-    if local is None:
-        return
-
-    route_solutions = (
-        db.session.query(RouteSolution)
-        .filter(RouteSolution.route_group_id == local.id)
-        .order_by(RouteSolution.is_selected.desc(), RouteSolution.id.asc())
-        .all()
-    )
-    if not route_solutions:
-        local.total_orders = 0
-        local.order_state_counts = None
-        return
-
-    selected = next((rs for rs in route_solutions if rs.is_selected), route_solutions[0])
-    recompute_route_group_order_counts(selected)
+    """Recompute route-group counts for all groups within a route plan."""
+    route_groups = list(getattr(plan, "route_groups", None) or [])
+    for route_group in route_groups:
+        recompute_route_group_order_counts(route_group)
 
 
 # Extend this dict when new plan types gain route-solution–like sub-tables.
 _PLAN_COUNT_HANDLERS: dict[str, PlanCountHandler] = {
-    "local_delivery": _recompute_local_delivery_counts,
+    "route_plan": _recompute_local_delivery_counts,
 }
 
 
@@ -114,7 +103,8 @@ def recompute_plan_order_counts(plan: "RoutePlan") -> None:
     if plan is None or plan.id is None:
         return
 
-    handler = _PLAN_COUNT_HANDLERS.get(getattr(plan, "plan_type", None))
+    plan_type = resolve_route_plan_workflow_type()
+    handler = _PLAN_COUNT_HANDLERS.get(plan_type)
     if handler is None:
         return
 
@@ -123,5 +113,5 @@ def recompute_plan_order_counts(plan: "RoutePlan") -> None:
     logger.debug(
         "recompute_plan_order_counts plan_id=%s plan_type=%s",
         plan.id,
-        plan.plan_type,
+        plan_type,
     )

@@ -991,9 +991,16 @@ def _resolve_plan_label(payload: dict) -> str:
     plan_type = payload.get("plan_type")
 
     if isinstance(label, str) and label.strip():
-        prefix = "Local delivery plan" if plan_type == "local_delivery" else "Delivery plan"
+        if plan_type == "route_plan":
+            prefix = "Route plan"
+        elif plan_type == "local_delivery":
+            prefix = "Local delivery plan"
+        else:
+            prefix = "Delivery plan"
         return f'{prefix} "{label.strip()}"'
 
+    if plan_type == "route_plan":
+        return "Route plan"
     if plan_type == "local_delivery":
         return "Local delivery plan"
 
@@ -1011,7 +1018,12 @@ def _resolve_route_subject_label(payload: dict) -> str:
     plan_label = payload.get("plan_label")
     if isinstance(plan_label, str) and plan_label.strip():
         plan_type = payload.get("plan_type")
-        prefix = "Local delivery plan" if plan_type == "local_delivery" else "Delivery plan"
+        if plan_type == "route_plan":
+            prefix = "Route plan"
+        elif plan_type == "local_delivery":
+            prefix = "Local delivery plan"
+        else:
+            prefix = "Delivery plan"
         return f'{prefix} "{plan_label.strip()}"'
 
     return _resolve_route_label(payload)

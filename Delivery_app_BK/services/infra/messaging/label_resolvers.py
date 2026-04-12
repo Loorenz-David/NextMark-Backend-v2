@@ -110,6 +110,33 @@ def _to_string(value: object) -> str:
     return str(value)
 
 
+def _format_short_date(value: datetime) -> str:
+    return f"{value.strftime('%b')} {value.day}"
+
+
+def _format_customer_eta_window(
+    *,
+    start_time: datetime,
+    end_time: datetime,
+    reference_time: datetime,
+) -> str:
+    start_label = start_time.strftime("%H:%M")
+    end_label = end_time.strftime("%H:%M")
+
+    if start_time.date() == reference_time.date():
+        if end_time.date() == start_time.date():
+            return f"today {start_label} to {end_label}"
+        return f"today {start_label} to {_format_short_date(end_time)} {end_label}"
+
+    if start_time.date() == end_time.date():
+        return f"{_format_short_date(start_time)} {start_label} to {end_label}"
+
+    return (
+        f"{_format_short_date(start_time)} {start_label} "
+        f"to {_format_short_date(end_time)} {end_label}"
+    )
+
+
 def _resolve_client_first_name(context: MessageRenderContext, channel: str) -> str:
     return _to_string(getattr(context.order, "client_first_name", None))
 
@@ -159,6 +186,8 @@ def _resolve_expected_arrival_time(context: MessageRenderContext, channel: str, 
     except Exception:
         arrival_time = arrival_time.astimezone(ZoneInfo("UTC"))
 
+    reference_time = datetime.now(arrival_time.tzinfo)
+
     # Round to nearest 30 minutes
     from datetime import timedelta
 
@@ -177,12 +206,14 @@ def _resolve_expected_arrival_time(context: MessageRenderContext, channel: str, 
 
         start_time = arrival_time - timedelta(minutes=range_minutes)
         end_time = arrival_time + timedelta(minutes=range_minutes)
-        return (
-            start_time.strftime("%Y-%m-%d") + " " + start_time.strftime("%H:%M")
-            + " to "
-            + end_time.strftime("%Y-%m-%d") + " " + end_time.strftime("%H:%M")
+        return _format_customer_eta_window(
+            start_time=start_time,
+            end_time=end_time,
+            reference_time=reference_time,
         )
-    return arrival_time.strftime("%Y-%m-%d") + " " + arrival_time.strftime("%H:%M")
+    if arrival_time.date() == reference_time.date():
+        return f"today {arrival_time.strftime('%H:%M')}"
+    return f"{_format_short_date(arrival_time)} {arrival_time.strftime('%H:%M')}"
 
 
 def _resolve_expected_arrival_time_costumer(context: MessageRenderContext, channel: str) -> str:

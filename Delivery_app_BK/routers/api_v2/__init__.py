@@ -145,7 +145,7 @@ def register_v2_blueprints(app):
     app.register_blueprint(bp["item_property_bp"], url_prefix="/api_v2/item_properties")
     app.register_blueprint(bp["item_position_bp"], url_prefix="/api_v2/item_positions")
     app.register_blueprint(bp["item_state_bp"], url_prefix="/api_v2/item_states")
-    app.register_blueprint(bp["local_delivery_plans_bp"], url_prefix="/api_v2/local_delivery_plans")
+    app.register_blueprint(bp["local_delivery_plans_bp"], url_prefix="/api_v2/route_groups")
     app.register_blueprint(bp["label_template_bp"], url_prefix="/api_v2/label_templates")
     app.register_blueprint(bp["message_template_bp"], url_prefix="/api_v2/message_templates")
     app.register_blueprint(bp["plan_bp"], url_prefix="/api_v2/route_plans")

@@ -77,6 +77,7 @@ class Order(
     total_weight_g = Column(Float, nullable=True)
     total_volume_cm3 = Column(Float, nullable=True)
     total_item_count = Column(Integer, nullable=True)
+    item_type_counts = Column(JSONB().with_variant(JSON, "sqlite"), nullable=True)
 
     order_state_id = Column(
         Integer,

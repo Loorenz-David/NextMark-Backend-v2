@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    resolve_effective_order_plan_objective,
+)
 from ....context import ServiceContext
 from ..extensions import merge_bundle_map, wrap_post_flush_action
 from .registry import resolve_update_extension_handler
@@ -10,19 +13,11 @@ from .types import OrderUpdateDelta, OrderUpdateExtensionContext, OrderUpdateExt
 
 def _resolve_plan_type(delta: OrderUpdateDelta) -> str | None:
     delivery_plan = delta.delivery_plan
-    plan_type = getattr(delivery_plan, "plan_type", None)
-    if plan_type:
-        return plan_type
-
     order = delta.order_instance
-    objective = getattr(order, "order_plan_objective", None)
-    if objective:
-        return objective
-
-    if delivery_plan is not None and getattr(delivery_plan, "route_groups", None) is not None:
-        return "local_delivery"
-
-    return None
+    return resolve_effective_order_plan_objective(
+        getattr(order, "order_plan_objective", None),
+        has_route_plan=delivery_plan is not None,
+    )
 
 
 def apply_order_update_extensions(

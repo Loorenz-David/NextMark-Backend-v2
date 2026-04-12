@@ -20,13 +20,12 @@ def get_client_form_data(token: str) -> dict:
     team_name = team.name if team is not None else str(order.team_id)
 
     items = [
-        {"name": item.name, "quantity": item.quantity}
+        {"item_type": item.item_type, "quantity": item.quantity}
         for item in (order.items or [])
     ]
 
     return {
-        "reference_number": order.reference_number,
-        "team_name": team_name,
+        "order_scalar_id": order.order_scalar_id,
         "team_timezone": team.time_zone if team is not None else None,
         "items": items,
         "expires_at": order.client_form_token_expires_at.isoformat(),

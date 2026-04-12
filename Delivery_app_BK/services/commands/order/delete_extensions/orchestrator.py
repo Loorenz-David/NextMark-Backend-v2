@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    resolve_effective_order_plan_objective,
+)
 from ....context import ServiceContext
 from ..extensions import wrap_post_flush_action
 from .registry import resolve_delete_extension_handler
@@ -19,7 +22,10 @@ def apply_order_delete_extensions(
 
     grouped: defaultdict[str, list[OrderDeleteDelta]] = defaultdict(list)
     for delta in delete_deltas:
-        plan_type = getattr(delta.delivery_plan, "plan_type", None)
+        plan_type = resolve_effective_order_plan_objective(
+            getattr(delta.order_instance, "order_plan_objective", None),
+            has_route_plan=delta.delivery_plan is not None,
+        )
         if not plan_type:
             continue
         grouped[plan_type].append(delta)

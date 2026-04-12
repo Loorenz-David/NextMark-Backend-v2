@@ -10,6 +10,9 @@ from Delivery_app_BK.models import (
     StorePickupPlan,
     db,
 )
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    resolve_effective_order_plan_objective,
+)
 
 from ....context import ServiceContext
 from .types import OrderDeleteDelta, OrderDeleteExtensionContext
@@ -27,7 +30,10 @@ def _collect_plan_ids_by_type(
     for delta in delete_deltas:
         delivery_plan = delta.delivery_plan
         plan_id = getattr(delivery_plan, "id", None)
-        plan_type = getattr(delivery_plan, "plan_type", None)
+        plan_type = resolve_effective_order_plan_objective(
+            getattr(delta.order_instance, "order_plan_objective", None),
+            has_route_plan=delivery_plan is not None,
+        )
         if plan_id is None or not plan_type:
             continue
         collected[plan_type].add(plan_id)

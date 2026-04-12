@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from Delivery_app_BK.models import RoutePlan, Order
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    resolve_effective_order_plan_objective,
+)
 from Delivery_app_BK.services.queries.get_instance import get_instance
 
 from ....context import ServiceContext
@@ -42,18 +45,16 @@ def apply_order_plan_objective(
             value=route_plan_id,
         )
 
-    route_plan_type = getattr(route_plan, "plan_type", "local_delivery")
-
-    effective_objective = (
-        order_instance.order_plan_objective
-        or plan_objective
-        or route_plan_type
+    effective_objective = resolve_effective_order_plan_objective(
+        order_instance.order_plan_objective,
+        has_route_plan=route_plan is not None,
+        fallback=plan_objective,
     )
     if not order_instance.order_plan_objective:
         order_instance.order_plan_objective = effective_objective
 
     handler: PlanObjectiveHandler | None = PLAN_OBJECTIVE_HANDLERS.get(
-        route_plan_type
+        effective_objective
     )
     if not handler:
         return PlanObjectiveCreateResult()

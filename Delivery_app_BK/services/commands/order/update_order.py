@@ -28,6 +28,9 @@ from Delivery_app_BK.services.infra.events.builders.order import (
     build_order_edited_event,
 )
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    normalize_order_plan_objective,
+)
 from Delivery_app_BK.services.domain.plan.route_freshness import touch_route_freshness
 from Delivery_app_BK.services.utils import model_requires_team, require_team_id
 from Delivery_app_BK.services.domain.order.delivery_windows import (
@@ -108,7 +111,9 @@ def update_order(ctx: ServiceContext):
             for delta in order_deltas
             if (
                 delta.delivery_plan is not None
-                and getattr(delta.delivery_plan, "plan_type", None) == "local_delivery"
+                and normalize_order_plan_objective(
+                    getattr(delta.order_instance, "order_plan_objective", None)
+                ) == "local_delivery"
                 and bool(delta.changed_sections)
             )
         ]

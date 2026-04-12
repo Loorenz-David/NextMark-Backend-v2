@@ -64,6 +64,7 @@ def _open_validated_smtp_client(smtp_config: EmailSMTP) -> smtplib.SMTP:
             smtp_client.ehlo()
 
     password = decrypt_secret(smtp_config.smtp_password)
+
     smtp_client.login(smtp_config.smtp_username, password)
     return smtp_client
 

@@ -31,6 +31,9 @@ from .create_serializers import (
 )
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
 from Delivery_app_BK.services.domain.plan.route_freshness import touch_route_freshness
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    resolve_effective_order_plan_objective,
+)
 from .plan_objectives import PlanObjectiveCreateResult, apply_order_plan_objective
 from ...domain.order.delivery_windows import (
     resolve_order_delivery_windows_timezone,
@@ -141,7 +144,10 @@ def create_order(ctx: ServiceContext):
             if delivery_plan:
                 resolved_delivery_plan_id = delivery_plan.id
                 if not order_fields.get("order_plan_objective"):
-                    order_fields["order_plan_objective"] = delivery_plan.plan_type
+                    order_fields["order_plan_objective"] = resolve_effective_order_plan_objective(
+                        None,
+                        has_route_plan=True,
+                    )
             order_fields.pop("delivery_plan_id", None)
 
             order_instance: Order = create_instance(ctx, Order, order_fields)
@@ -189,7 +195,10 @@ def create_order(ctx: ServiceContext):
                     ctx=ctx,
                     order_instance=order_instance,
                     delivery_plan=delivery_plan,
-                    plan_objective=delivery_plan.plan_type,
+                    plan_objective=resolve_effective_order_plan_objective(
+                        order_instance.order_plan_objective,
+                        has_route_plan=True,
+                    ),
                 )
                 extra_instances.extend(objective_result.instances)
                 post_flush_actions.extend(objective_result.post_flush_actions)

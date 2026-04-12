@@ -16,6 +16,19 @@ from ..base.update_instance import update_instance
 from ..utils import extract_targets
 
 
+def _derive_date_strategy_from_dates(
+    start_date: datetime | None,
+    end_date: datetime | None,
+) -> str | None:
+    if start_date is None or end_date is None:
+        return None
+
+    if start_date.date() == end_date.date():
+        return "single"
+
+    return "range"
+
+
 def apply_route_plan_patch(
     route_plan: RoutePlan,
     patch: RoutePlanPatchRequest,
@@ -31,6 +44,13 @@ def apply_route_plan_patch(
 
     if patch.has_end_date and patch.end_date is not None:
         route_plan.end_date = patch.end_date
+
+    derived_date_strategy = _derive_date_strategy_from_dates(
+        route_plan.start_date,
+        route_plan.end_date,
+    )
+    if derived_date_strategy is not None:
+        route_plan.date_strategy = derived_date_strategy
 
     validate_time_range(
         route_plan.start_date,
