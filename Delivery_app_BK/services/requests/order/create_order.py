@@ -40,6 +40,7 @@ ORDER_ALLOWED_FIELDS = {
     "delivery_plan_id",
     "items",
     "operation_type",
+    "order_notes",
 }
 
 ORDER_FORBIDDEN_FIELDS = {
