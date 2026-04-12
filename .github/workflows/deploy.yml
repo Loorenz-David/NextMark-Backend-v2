@@ -42,5 +42,5 @@ jobs:
             echo "$response"
             echo "$response" | grep '"status":"ok"' || exit 1
 
-            echo "Performing external health check for ssl domain delivery.beyoworkaroundtheclock ..."
+            echo "Performing external health check for ssl domain delivery.beyoworkaroundtheclock ...."
             curl -f https://deliveryapi.beyoworkaroundtheclock.com || exit 1
