@@ -13,6 +13,8 @@ jobs:
     environment: deployment to ec2
 
     steps:
+      - name: Debug EC2 host
+        run: echo "Deploying to ${{ secrets.EC2_HOST }}"
       - name: SSH deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -20,6 +22,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            echo "Connected to host: $(hostname -I)"
             set -e
             cd /var/www/nextmark-backend
             echo "Resetting repo..."
