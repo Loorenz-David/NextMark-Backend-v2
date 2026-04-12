@@ -357,12 +357,8 @@ def _resolve_departure_time(
     plan_start = None
     timezone_plan = None
     route_group = getattr(route_solution, "route_group", None)
-    if route_group is None:
-        route_group = getattr(route_solution, "local_delivery_plan", None)
     if route_group is not None:
         plan = getattr(route_group, "route_plan", None)
-        if plan is None:
-            plan = getattr(route_group, "delivery_plan", None)
         timezone_plan = route_group
         if plan is not None and getattr(plan, "start_date", None):
             plan_start = _coerce_datetime(plan.start_date)

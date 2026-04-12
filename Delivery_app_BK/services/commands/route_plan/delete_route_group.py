@@ -4,6 +4,12 @@ from __future__ import annotations
 from Delivery_app_BK.errors import NotFound, ValidationFailed
 from Delivery_app_BK.models import RouteGroup, RouteSolution, db
 from Delivery_app_BK.services.context import ServiceContext
+from Delivery_app_BK.services.commands.route_plan.create_serializers import (
+    serialize_created_route_plan,
+)
+from Delivery_app_BK.services.domain.state_transitions.plan_state_engine import (
+    maybe_sync_plan_state_from_groups,
+)
 from Delivery_app_BK.services.domain.route_operations.plan.recompute_plan_totals import recompute_plan_totals
 
 
@@ -42,10 +48,13 @@ def delete_route_group(ctx: ServiceContext) -> dict:
     route_plan = route_group.route_plan
     db.session.delete(route_group)
     if route_plan is not None:
+        db.session.flush()
         recompute_plan_totals(route_plan)
+        maybe_sync_plan_state_from_groups(route_plan)
     db.session.commit()
 
     return {
         "deleted": True,
         "route_group_id": route_group_id,
+        "route_plan": serialize_created_route_plan(route_plan) if route_plan is not None else None,
     }

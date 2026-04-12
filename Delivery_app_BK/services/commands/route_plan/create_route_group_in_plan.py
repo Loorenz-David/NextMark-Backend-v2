@@ -14,6 +14,9 @@ from Delivery_app_BK.services.domain.route_operations.plan.plan_states import Pl
 from Delivery_app_BK.services.domain.route_operations.plan.recompute_route_group_totals import (
     recompute_route_group_totals,
 )
+from Delivery_app_BK.services.domain.state_transitions.plan_state_engine import (
+    maybe_sync_plan_state_from_groups,
+)
 from Delivery_app_BK.services.domain.route_operations.plan.route_group_zone_snapshot import (
     NO_ZONE_SNAPSHOT_NAME,
     build_route_group_zone_snapshot,
@@ -27,6 +30,9 @@ from Delivery_app_BK.services.requests.route_plan.plan.create_route_group import
 from Delivery_app_BK.services.commands.route_plan.zone_template_defaults import (
     build_zone_template_route_solution_defaults,
     build_zone_template_snapshot,
+)
+from Delivery_app_BK.services.commands.route_plan.create_serializers import (
+    serialize_created_route_plan,
 )
 
 
@@ -70,6 +76,7 @@ def _create_or_get_zone_route_group(
         selected_solution = _resolve_selected_solution(existing)
         return {
             "created": False,
+            "route_plan": serialize_created_route_plan(route_plan),
             "route_group": serialize_route_group(existing, ctx),
             "route_solution": _serialize_route_solution_light(selected_solution),
         }
@@ -124,15 +131,18 @@ def _create_or_get_zone_route_group(
         selected_solution = _resolve_selected_solution(existing)
         return {
             "created": False,
+            "route_plan": serialize_created_route_plan(route_plan),
             "route_group": serialize_route_group(existing, ctx),
             "route_solution": _serialize_route_solution_light(selected_solution),
         }
 
     recompute_route_group_totals(route_plan)
+    maybe_sync_plan_state_from_groups(route_plan)
     db.session.commit()
 
     return {
         "created": True,
+        "route_plan": serialize_created_route_plan(route_plan),
         "route_group": serialize_route_group(route_group, ctx),
         "route_solution": _serialize_route_solution_light(route_solution),
     }
@@ -169,10 +179,12 @@ def _create_manual_no_zone_route_group(
     db.session.add(route_solution)
     db.session.flush()
     recompute_route_group_totals(route_plan)
+    maybe_sync_plan_state_from_groups(route_plan)
     db.session.commit()
 
     return {
         "created": True,
+        "route_plan": serialize_created_route_plan(route_plan),
         "route_group": serialize_route_group(route_group, ctx),
         "route_solution": _serialize_route_solution_light(route_solution),
     }

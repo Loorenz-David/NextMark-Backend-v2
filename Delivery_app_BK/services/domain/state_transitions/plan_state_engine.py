@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from Delivery_app_BK.models import RouteGroup, db
 from Delivery_app_BK.services.domain.order.order_states import OrderState as OrderStateEnum
 from Delivery_app_BK.services.domain.route_operations.plan.plan_states import PlanStateId
 
@@ -116,12 +117,15 @@ def maybe_auto_complete_plan(plan: "RoutePlan") -> bool:
 
 
 def derive_plan_state_from_groups(plan: "RoutePlan") -> int:
-    """Derive plan state from non-deleted route groups using strict all-match rules."""
-    groups = [
-        group
-        for group in (plan.route_groups or [])
-        if not getattr(group, "deleted_at", None)
-    ]
+    """Derive plan state from surviving persisted route groups using strict all-match rules."""
+    if plan is None or getattr(plan, "id", None) is None:
+        return PlanStateId.OPEN
+
+    groups = (
+        db.session.query(RouteGroup)
+        .filter(RouteGroup.route_plan_id == plan.id)
+        .all()
+    )
     if not groups:
         return PlanStateId.OPEN
 

@@ -31,6 +31,33 @@ def _ensure_utc(value: datetime | None) -> datetime | None:
     return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+def _normalize_legacy_single_day_end_date(
+    route_plan: RoutePlan,
+    end_date: datetime | None,
+) -> datetime | None:
+    if not end_date:
+        return end_date
+
+    if getattr(route_plan, "date_strategy", None) != "single":
+        return end_date
+
+    start_date = _ensure_utc(getattr(route_plan, "start_date", None))
+    if not start_date:
+        return end_date
+
+    # Legacy broken writes stored single-day plans at 00:00:00 instead of end-of-day.
+    if (
+        end_date.date() == start_date.date()
+        and end_date.hour == 0
+        and end_date.minute == 0
+        and end_date.second == 0
+        and end_date.microsecond == 0
+    ):
+        return end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    return end_date
+
+
 def update_route_stop_position(
     ctx: ServiceContext,
     route_stop_id: int,
@@ -202,6 +229,7 @@ def _is_route_solution_end_date_valid (route_solution:RouteSolution):
             now = datetime.now(timezone.utc)
             start_date = _ensure_utc(route_plan.start_date) or now
             end_date = _ensure_utc(route_plan.end_date) or start_date
+            end_date = _normalize_legacy_single_day_end_date(route_plan, end_date)
             
     except Exception:
         raise NotFound('route solution has no route group or route plan linked.')

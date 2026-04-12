@@ -162,12 +162,8 @@ def _apply_route_end_warnings(
 def _resolve_allowed_end(route_solution: RouteSolution) -> Optional[datetime]:
     route_group = getattr(route_solution, "route_group", None)
     if route_group is None:
-        route_group = getattr(route_solution, "local_delivery_plan", None)
-    if route_group is None:
         return None
     route_plan = getattr(route_group, "route_plan", None)
-    if route_plan is None:
-        route_plan = getattr(route_group, "delivery_plan", None)
     if not route_plan:
         return None
 

@@ -1,3 +1,6 @@
+from sqlalchemy.orm.exc import NoResultFound
+
+from Delivery_app_BK.errors import NotFound
 from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.models import RoutePlan
 
@@ -17,7 +20,10 @@ from Delivery_app_BK.services.queries.route_solutions import (
 
 
 def local_delivery_overview(ctx: ServiceContext, plan_id: int):
-    plan: RoutePlan = get_instance(ctx=ctx, model=RoutePlan, value=plan_id)
+    try:
+        plan: RoutePlan = get_instance(ctx=ctx, model=RoutePlan, value=plan_id)
+    except NoResultFound:
+        raise NotFound(f"Route plan {plan_id} not found.")
     route_groups = sorted(
         list(getattr(plan, "route_groups", None) or []),
         key=lambda group: (
