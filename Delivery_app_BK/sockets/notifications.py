@@ -673,9 +673,16 @@ def _build_notification_description(*, event_name: str, order: Order | None, pay
         return f"{route_subject} was deleted."
     if event_name == "route_solution_stop.updated":
         stop_order = _parse_int(payload.get("stop_order"))
-        if stop_order is not None:
-            return f"Stop {stop_order} on {route_label} was updated."
-        return f"A stop on {route_label} was updated."
+        stop_label = f"Stop {stop_order}" if stop_order is not None else "A stop"
+        client_label = payload.get("notification_client_label")
+        arrival_label = payload.get("notification_arrival_label")
+        if client_label and arrival_label:
+            return f"{stop_label} on {route_label} — {client_label}, arriving {arrival_label}."
+        if client_label:
+            return f"{stop_label} on {route_label} — {client_label} was updated."
+        if arrival_label:
+            return f"{stop_label} on {route_label} — arriving {arrival_label}."
+        return f"{stop_label} on {route_label} was updated."
     return "A new update is available."
 
 

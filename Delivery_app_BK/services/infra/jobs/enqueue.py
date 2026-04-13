@@ -58,7 +58,7 @@ def schedule_job(
 ) -> Job:
     queue = get_named_queue(queue_key)
     scheduler = Scheduler(queue=queue, connection=get_current_rq_redis_connection())
-    policy = retry_policy or DEFAULT_RETRY_POLICY
+    safe_job_id = job_id.replace(":", "-") if job_id else job_id
     return scheduler.schedule(
         scheduled_time=scheduled_time,
         func=fn,
@@ -66,7 +66,6 @@ def schedule_job(
         kwargs=kwargs or {},
         interval=interval,
         repeat=repeat,
-        id=job_id,
+        id=safe_job_id,
         queue_name=queue.name,
-        retry=policy.to_rq_retry(),
     )

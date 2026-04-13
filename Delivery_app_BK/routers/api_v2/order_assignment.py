@@ -110,6 +110,8 @@ def resolve_order_batch_selection():
 @jwt_required()
 @role_required([ADMIN, ASSISTANT])
 def assign_orders_to_plan_batch(plan_id: int):
+    import time
+    time.sleep(5)  # Simulate a long-running operation
     identity = get_jwt()
     incoming_data = request.get_json(silent=True) or {}
     prevent_event_bus = incoming_data.pop("prevent_event_bus", False)

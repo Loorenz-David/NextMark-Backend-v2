@@ -61,6 +61,30 @@ from .plan_changes import (
 )
 
 
+def _fetch_stop_eta_by_order_id(
+    order_ids: list[int],
+    team_id: int | None,
+) -> dict[int, object]:
+    """
+    Returns {order_id: expected_arrival_time} for the selected route solution stop
+    of each order. Queried at a point-in-time so callers can snapshot ETAs before
+    and after route sync runs.
+    """
+    if not order_ids:
+        return {}
+    query = (
+        db.session.query(RouteSolutionStop.order_id, RouteSolutionStop.expected_arrival_time)
+        .join(RouteSolution, RouteSolutionStop.route_solution_id == RouteSolution.id)
+        .filter(
+            RouteSolutionStop.order_id.in_(order_ids),
+            RouteSolution.is_selected.is_(True),
+        )
+    )
+    if team_id is not None:
+        query = query.filter(RouteSolution.team_id == team_id)
+    return {row.order_id: row.expected_arrival_time for row in query.all()}
+
+
 def apply_orders_route_plan_change(
     ctx: ServiceContext,
     order_ids: int | list[int],
@@ -144,10 +168,20 @@ def apply_orders_route_plan_change(
     )
     batched_old_local_delivery_order_ids: set[int] = old_local_delivery_batch["order_ids"]
 
+    # Snapshot stop ETAs before any stop reassignment so we have the old arrival
+    # times available for the reschedule event payload.
+    changed_order_ids = [
+        order_instance.id
+        for order_instance in (orders_by_target_id[tid] for tid in normalized_order_ids)
+        if order_instance.id in old_plan_id_by_order_id
+    ]
+    old_eta_by_order_id = _fetch_stop_eta_by_order_id(changed_order_ids, ctx.team_id)
+
     pending_events: list[dict] = []
     extra_instances: list[object] = list(old_local_delivery_batch["instances"])
     post_flush_actions = list(old_local_delivery_batch["post_flush_actions"])
     plan_change_result_by_order_id: dict[int, PlanChangeResult] = {}
+    reschedule_candidates: list[dict] = []
 
     for target_id in normalized_order_ids:
         order_instance = orders_by_target_id[target_id]
@@ -184,16 +218,10 @@ def apply_orders_route_plan_change(
             (getattr(old_plan, "start_date", None), getattr(old_plan, "end_date", None))
             != (getattr(new_plan, "start_date", None), getattr(new_plan, "end_date", None))
         ):
-            pending_events.append(
-                build_delivery_rescheduled_event(
-                    order_instance,
-                    old_plan_start=getattr(old_plan, "start_date", None),
-                    old_plan_end=getattr(old_plan, "end_date", None),
-                    new_plan_start=getattr(new_plan, "start_date", None),
-                    new_plan_end=getattr(new_plan, "end_date", None),
-                    reason="plan_move_date_changed",
-                )
-            )
+            reschedule_candidates.append({
+                "order": order_instance,
+                "old_plan": old_plan,
+            })
 
         pending_events.append(
             build_route_plan_changed_event(order_instance, old_plan_id, new_plan)
@@ -210,6 +238,27 @@ def apply_orders_route_plan_change(
         action()
     if post_flush_actions:
         db.session.flush()
+
+    # Build reschedule events after route sync so new stop ETAs are resolved.
+    if reschedule_candidates:
+        new_eta_by_order_id = _fetch_stop_eta_by_order_id(
+            [c["order"].id for c in reschedule_candidates], ctx.team_id
+        )
+        for candidate in reschedule_candidates:
+            order_instance = candidate["order"]
+            old_plan = candidate["old_plan"]
+            pending_events.append(
+                build_delivery_rescheduled_event(
+                    order_instance,
+                    old_plan_start=getattr(old_plan, "start_date", None),
+                    old_plan_end=getattr(old_plan, "end_date", None),
+                    new_plan_start=getattr(new_plan, "start_date", None),
+                    new_plan_end=getattr(new_plan, "end_date", None),
+                    old_expected_arrival=old_eta_by_order_id.get(order_instance.id),
+                    new_expected_arrival=new_eta_by_order_id.get(order_instance.id),
+                    reason="plan_move_date_changed",
+                )
+            )
 
     plans_to_touch = {plan.id: plan for plan in [new_plan, *old_plans_by_id.values()]}
     for route_plan in plans_to_touch.values():

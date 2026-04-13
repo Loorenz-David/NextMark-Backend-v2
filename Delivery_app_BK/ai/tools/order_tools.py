@@ -8,7 +8,7 @@ from Delivery_app_BK.services.commands.order.update_order import update_order as
 from Delivery_app_BK.services.commands.order.update_order import MUTABLE_FIELDS as ORDER_MUTABLE_FIELDS
 from Delivery_app_BK.services.commands.order.order_states.update_orders_state import update_orders_state
 from Delivery_app_BK.services.commands.order.update_order_route_plan import (
-    apply_orders_route_plan_change as update_orders_delivery_plan,
+    update_orders_route_plan as update_orders_delivery_plan,
 )
 from Delivery_app_BK.services.queries.order.list_orders import (
     list_orders as list_orders_service,

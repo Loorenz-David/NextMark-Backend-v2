@@ -172,7 +172,29 @@ def _resolve_plan_delivery_date_display(context: MessageRenderContext, channel: 
 
 
 
+def _round_to_nearest_30(dt: datetime) -> datetime:
+    from datetime import timedelta
+    minute = dt.minute
+    if minute < 15:
+        rounded_minute = 0
+    elif minute < 45:
+        rounded_minute = 30
+    else:
+        dt = dt + timedelta(hours=1)
+        rounded_minute = 0
+    return dt.replace(minute=rounded_minute, second=0, microsecond=0)
+
+
+def _get_eta_tolerance_minutes(context: MessageRenderContext) -> int:
+    route_solution = context.get_selected_route_solution()
+    tolerance_seconds = getattr(route_solution, "eta_message_tolerance", None)
+    if not isinstance(tolerance_seconds, int) or isinstance(tolerance_seconds, bool):
+        tolerance_seconds = 1800
+    return max(0, tolerance_seconds // 60)
+
+
 def _resolve_expected_arrival_time(context: MessageRenderContext, channel: str, range_minutes: int = 0) -> str:
+    from datetime import timedelta
     stop = context.get_selected_route_stop()
     if stop is None:
         return ""
@@ -187,23 +209,9 @@ def _resolve_expected_arrival_time(context: MessageRenderContext, channel: str, 
         arrival_time = arrival_time.astimezone(ZoneInfo("UTC"))
 
     reference_time = datetime.now(arrival_time.tzinfo)
-
-    # Round to nearest 30 minutes
-    from datetime import timedelta
-
-    minute = arrival_time.minute
-    if minute < 15:
-        rounded_minute = 0
-    elif minute < 45:
-        rounded_minute = 30
-    else:
-        arrival_time = arrival_time + timedelta(hours=1)
-        rounded_minute = 0
-
-    arrival_time = arrival_time.replace(minute=rounded_minute, second=0, microsecond=0)
+    arrival_time = _round_to_nearest_30(arrival_time)
 
     if range_minutes > 0:
-
         start_time = arrival_time - timedelta(minutes=range_minutes)
         end_time = arrival_time + timedelta(minutes=range_minutes)
         return _format_customer_eta_window(
@@ -217,14 +225,10 @@ def _resolve_expected_arrival_time(context: MessageRenderContext, channel: str, 
 
 
 def _resolve_expected_arrival_time_costumer(context: MessageRenderContext, channel: str) -> str:
-    route_solution = context.get_selected_route_solution()
-    tolerance_seconds = getattr(route_solution, "eta_message_tolerance", None)
-    if not isinstance(tolerance_seconds, int) or isinstance(tolerance_seconds, bool):
-        tolerance_seconds = 1800
     return _resolve_expected_arrival_time(
         context,
         channel,
-        range_minutes=max(0, tolerance_seconds // 60),
+        range_minutes=_get_eta_tolerance_minutes(context),
     )
 
 def _resolve_tracking_link(context: MessageRenderContext, channel: str) -> str:
@@ -233,6 +237,111 @@ def _resolve_tracking_link(context: MessageRenderContext, channel: str) -> str:
 
 def _resolve_client_form_link(context: MessageRenderContext, channel: str) -> str:
     return _to_string(context.extra_context.get("client_form_link"))
+
+
+def _parse_reschedule_window(
+    context: MessageRenderContext,
+) -> tuple[datetime | None, datetime | None, datetime | None, datetime | None]:
+    """
+    Returns (old_start, old_end, new_start, new_end) from a DELIVERY_RESCHEDULED
+    event payload, converted to the team's timezone.
+
+    For every reason, expected_arrival values take priority over plan window dates
+    because they are per-order (computed by route optimisation) and more precise.
+    Plan window dates are used as fallback when arrivals are absent.
+
+    - eta_changed             → arrivals only, no window end
+    - plan_window_changed     → arrivals if present, otherwise plan window
+    - plan_move_date_changed  → arrivals if present, otherwise plan window
+    """
+    order_event = context.order_event
+    if order_event is None:
+        return None, None, None, None
+
+    payload = getattr(order_event, "payload", None) or {}
+    reason = payload.get("reason")
+    tz_str = context.get_team_time_zone()
+
+    def _parse(raw: object) -> datetime | None:
+        if not isinstance(raw, str):
+            return None
+        try:
+            return datetime.fromisoformat(raw).astimezone(ZoneInfo(tz_str))
+        except Exception:
+            return None
+
+    old_arrival = _parse(payload.get("old_expected_arrival"))
+    new_arrival = _parse(payload.get("new_expected_arrival"))
+
+    if reason == "eta_changed":
+        return old_arrival, None, new_arrival, None
+
+    old_plan_start = _parse(payload.get("old_plan_start"))
+    old_plan_end = _parse(payload.get("old_plan_end"))
+    new_plan_start = _parse(payload.get("new_plan_start"))
+    new_plan_end = _parse(payload.get("new_plan_end"))
+
+    # Prefer per-order arrival times; fall back to plan window bounds.
+    old_start = old_arrival if old_arrival is not None else old_plan_start
+    old_end = None if old_arrival is not None else old_plan_end
+    new_start = new_arrival if new_arrival is not None else new_plan_start
+    new_end = None if new_arrival is not None else new_plan_end
+
+    return old_start, old_end, new_start, new_end
+
+
+def _resolve_reschedule_time(context: MessageRenderContext, channel: str) -> str:
+    from datetime import timedelta
+
+    # New side: resolved from the route stop via context — the same mechanism
+    # used by expected_arrival_time_costumer. Team timezone and tolerance are
+    # already handled there, so no conversion is needed here.
+    range_minutes = _get_eta_tolerance_minutes(context)
+    new_time_str = _resolve_expected_arrival_time(context, channel, range_minutes=range_minutes)
+    if not new_time_str:
+        return ""
+
+    stop = context.get_selected_route_stop()
+    raw_new_eta = getattr(stop, "expected_arrival_time", None) if stop else None
+    if raw_new_eta is None:
+        return new_time_str
+
+    try:
+        new_date = raw_new_eta.astimezone(ZoneInfo(context.get_team_time_zone())).date()
+    except Exception:
+        new_date = raw_new_eta.astimezone(ZoneInfo("UTC")).date()
+
+    # Old side: from payload, converted to team timezone.
+    old_start, old_end, _, _ = _parse_reschedule_window(context)
+
+    if old_start is not None and old_end is None:
+        old_start = _round_to_nearest_30(old_start)
+        if range_minutes > 0:
+            old_end = old_start + timedelta(minutes=range_minutes)
+            old_start = old_start - timedelta(minutes=range_minutes)
+
+    def _fmt_time(start: datetime, end: datetime | None) -> str:
+        if end is not None:
+            return f"{start.strftime('%H:%M')}–{end.strftime('%H:%M')}"
+        return start.strftime("%H:%M")
+
+    if old_start is None:
+        return new_time_str
+
+    date_changed = old_start.date() != new_date
+    old_time_str = _fmt_time(old_start, old_end)
+    time_changed = old_time_str != new_time_str
+
+    if date_changed and time_changed:
+        return f"{_format_short_date(old_start)}, {old_time_str} → {new_time_str}"
+
+    if date_changed:
+        return f"{_format_short_date(old_start)} → {_format_short_date(new_date)}"
+
+    if time_changed:
+        return f"{old_time_str} → {new_time_str}"
+
+    return new_time_str
 
 
 def phone_to_string(phone_data: object) -> str:
@@ -299,7 +408,8 @@ LABEL_RESOLVER_REGISTRY: dict[str, LabelResolver] = {
     "client_phone_number": _resolve_client_phone_number,
     "client_phone_number_secondary": lambda context, channel: _resolve_client_phone_number(context, channel, is_secondary=True),
     "client_address": _resolve_client_address,
-    "plan_delivery_date_display":_resolve_plan_delivery_date_display,
+    "plan_delivery_date_display": _resolve_plan_delivery_date_display,
+    "reschedule_time": _resolve_reschedule_time,
 }
 
 

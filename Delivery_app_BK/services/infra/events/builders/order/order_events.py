@@ -130,10 +130,12 @@ def build_order_state_lifecycle_event(order_instance: Order, state_instance) -> 
 def build_delivery_rescheduled_event(
     order_instance: Order,
     *,
-    old_plan_start: datetime | None,
-    old_plan_end: datetime | None,
-    new_plan_start: datetime | None,
-    new_plan_end: datetime | None,
+    old_plan_start: datetime | None = None,
+    old_plan_end: datetime | None = None,
+    new_plan_start: datetime | None = None,
+    new_plan_end: datetime | None = None,
+    old_expected_arrival: datetime | None = None,
+    new_expected_arrival: datetime | None = None,
     reason: str = "plan_window_changed",
 ) -> dict:
     return {
@@ -145,6 +147,8 @@ def build_delivery_rescheduled_event(
             "old_plan_end": old_plan_end.isoformat() if old_plan_end else None,
             "new_plan_start": new_plan_start.isoformat() if new_plan_start else None,
             "new_plan_end": new_plan_end.isoformat() if new_plan_end else None,
+            "old_expected_arrival": old_expected_arrival.isoformat() if old_expected_arrival else None,
+            "new_expected_arrival": new_expected_arrival.isoformat() if new_expected_arrival else None,
             "reason": reason,
         },
     }

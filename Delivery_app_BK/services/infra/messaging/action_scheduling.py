@@ -120,11 +120,12 @@ def _resolve_channel(action_name: str) -> str:
     raise ValueError(f"Unsupported action channel for '{action_name}'.")
 
 
-def _compute_scheduled_for(*, template: MessageTemplate, anchor_at: datetime) -> datetime:
-    offset_value = int(template.schedule_offset_value or 0)
+def _compute_scheduled_for(*, template: MessageTemplate, anchor_at: datetime) -> datetime | None:
+    if template.schedule_offset_value is None:
+        return None
+
+    offset_value = template.schedule_offset_value
     offset_unit = template.schedule_offset_unit or "minutes"
-    if offset_value == 0:
-        return anchor_at
 
     if offset_unit == "minutes":
         delta = timedelta(minutes=offset_value)
@@ -199,7 +200,7 @@ def _resolve_order_future_anchor(order, baseline: datetime) -> datetime | None:
     route_plan = getattr(order, "route_plan", None)
     if route_plan is not None:
         start_date = getattr(route_plan, "start_date", None)
-        if start_date is not None and start_date > baseline:
+        if start_date is not None and start_date.date() >= baseline.date():
             return start_date
 
     return None
@@ -216,7 +217,7 @@ def _resolve_route_plan_future_anchor(route_plan, baseline: datetime) -> datetim
             return expected_start_time
 
     start_date = getattr(route_plan, "start_date", None)
-    if start_date is not None and start_date > baseline:
+    if start_date is not None and start_date.date() >= baseline.date():
         return start_date
 
     return None

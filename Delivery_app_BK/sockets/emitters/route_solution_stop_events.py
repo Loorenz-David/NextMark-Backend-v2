@@ -1,6 +1,11 @@
+from __future__ import annotations
+
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from flask import current_app
 
-from Delivery_app_BK.models import RouteSolutionStop, RouteSolution, RouteGroup, db
+from Delivery_app_BK.models import Order, RouteSolutionStop, RouteSolution, RouteGroup, Team, db
 from Delivery_app_BK.services.domain.route_operations.plan.route_freshness import get_route_freshness_updated_at
 from Delivery_app_BK.sockets.contracts.realtime import (
     BUSINESS_EVENT_ROUTE_SOLUTION_STOP_UPDATED,
@@ -36,6 +41,10 @@ def emit_route_solution_stop_updated(route_solution_stop: RouteSolutionStop, *, 
     team_id = route_solution_stop.team_id
     route_plan_id = route_group.route_plan_id
 
+    order = db.session.get(Order, route_solution_stop.order_id) if route_solution_stop.order_id else None
+    team = db.session.get(Team, team_id) if team_id else None
+    tz_str = getattr(team, "time_zone", None) or "UTC"
+
     envelope = build_business_event_envelope(
         event_name=BUSINESS_EVENT_ROUTE_SOLUTION_STOP_UPDATED,
         occurred_at=None,
@@ -55,6 +64,8 @@ def emit_route_solution_stop_updated(route_solution_stop: RouteSolutionStop, *, 
             "expected_departure_time": route_solution_stop.expected_departure_time.isoformat() if route_solution_stop.expected_departure_time else None,
             "actual_arrival_time": route_solution_stop.actual_arrival_time.isoformat() if route_solution_stop.actual_arrival_time else None,
             "actual_departure_time": route_solution_stop.actual_departure_time.isoformat() if route_solution_stop.actual_departure_time else None,
+            "notification_client_label": _build_stop_client_label(order),
+            "notification_arrival_label": _format_stop_arrival_label(route_solution_stop.expected_arrival_time, tz_str),
             **(payload or {}),
         },
     )
@@ -87,3 +98,33 @@ def _plan_id_aliases(*, route_group_id: int, route_plan_id: int) -> dict:
         "route_group_id": route_group_id,
         "route_plan_id": route_plan_id,
     }
+
+
+def _build_stop_client_label(order: Order | None) -> str | None:
+    if order is None:
+        return None
+    first = (getattr(order, "client_first_name", None) or "").strip()
+    last = (getattr(order, "client_last_name", None) or "").strip()
+    if first or last:
+        parts = [first] if first else []
+        if last:
+            parts.append(last[0].upper() + ".")
+        return " ".join(parts)
+    scalar_id = getattr(order, "order_scalar_id", None)
+    if isinstance(scalar_id, int):
+        return f"Order #{scalar_id}"
+    return None
+
+
+def _format_stop_arrival_label(arrival_time: datetime | None, tz_str: str) -> str | None:
+    if arrival_time is None:
+        return None
+    try:
+        local = arrival_time.astimezone(ZoneInfo(tz_str))
+        now = datetime.now(local.tzinfo)
+        time_str = local.strftime("%H:%M")
+        if local.date() == now.date():
+            return f"today {time_str}"
+        return f"{local.strftime('%b')} {local.day} {time_str}"
+    except Exception:
+        return None
