@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from Delivery_app_BK.models import RouteSolution, RouteSolutionStop, db
+from Delivery_app_BK.models import RouteSolution, RouteSolutionStop, User, db
 from Delivery_app_BK.services.context import ServiceContext
 from Delivery_app_BK.services.domain.route_operations.local_delivery import (
     ensure_route_solution_actual_start_time,
@@ -53,6 +53,7 @@ def mark_route_stop_actual_arrival_time(
     db.session.add(route_stop)
     db.session.add(route_solution)
     db.session.commit()
+    actor = db.session.get(User, ctx.user_id) if ctx.user_id else None
 
     # Emit real-time event
     create_route_solution_stop_event(
@@ -66,7 +67,7 @@ def mark_route_stop_actual_arrival_time(
     )
     emit_route_solution_stop_updated(route_stop, payload={
         "actual_arrival_time": route_stop.actual_arrival_time.isoformat() if route_stop.actual_arrival_time else None,
-    })
+    }, actor=actor)
 
     response = {
         "route_solution_stop": serialize_route_solution_stops([route_stop], ctx),

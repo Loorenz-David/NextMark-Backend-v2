@@ -10,6 +10,7 @@ from Delivery_app_BK.models import (
     RoutePlanState,
     RouteSolution,
     Team,
+    User,
     Zone,
     ZoneTemplate,
 )
@@ -25,6 +26,9 @@ from Delivery_app_BK.services.domain.route_operations.plan.route_group_zone_snap
     NO_ZONE_SNAPSHOT_NAME,
     build_no_zone_route_group_snapshot,
     build_route_group_zone_snapshot,
+)
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    resolve_route_plan_workflow_type,
 )
 from Delivery_app_BK.services.domain.route_operations.plan.recompute_route_group_totals import (
     recompute_route_group_totals,
@@ -211,8 +215,10 @@ def create_plan(ctx: ServiceContext):
     if pending_order_events:
         emit_order_events(ctx, pending_order_events)
 
+    actor = db.session.get(User, ctx.user_id) if ctx.user_id else None
+
     for route_solution in created_route_solutions:
-        emit_route_solution_created(route_solution)
+        emit_route_solution_created(route_solution, actor=actor)
 
     for bundle in created_bundles:
         route_plan_payload = bundle.get("delivery_plan") or {}
@@ -228,6 +234,7 @@ def create_plan(ctx: ServiceContext):
             payload={
                 "route_plan_id": route_plan_id,
                 "label": route_plan_payload.get("label"),
+                "plan_type": resolve_route_plan_workflow_type(),
                 "date_strategy": route_plan_payload.get("date_strategy"),
                 "route_freshness_updated_at": route_plan_payload.get("updated_at"),
             },

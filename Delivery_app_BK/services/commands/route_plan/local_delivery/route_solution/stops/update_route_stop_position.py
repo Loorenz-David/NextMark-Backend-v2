@@ -2,7 +2,7 @@ from typing import Any, List
 from datetime import datetime, timezone
 
 from Delivery_app_BK.errors import ValidationFailed, NotFound
-from Delivery_app_BK.models import RouteSolution, RouteSolutionStop,RoutePlan, db
+from Delivery_app_BK.models import RouteSolution, RouteSolutionStop, RoutePlan, User, db
 from Delivery_app_BK.directions import refresh_route_solution_incremental
 from Delivery_app_BK.route_optimization.constants.is_optimized import (
     IS_OPTIMIZED_NOT_OPTIMIZED,
@@ -18,7 +18,10 @@ from Delivery_app_BK.services.queries.route_solutions import (
 )
 from Delivery_app_BK.services.commands.route_plan.local_delivery.event_helpers import create_route_solution_stop_event
 from Delivery_app_BK.sockets.contracts.realtime import BUSINESS_EVENT_ROUTE_SOLUTION_STOP_UPDATED
-from Delivery_app_BK.sockets.emitters.route_solution_stop_events import emit_route_solution_stop_updated
+from Delivery_app_BK.sockets.emitters.route_solution_stop_events import (
+    emit_route_solution_stop_updated,
+    notify_route_solution_stops_batch_updated,
+)
 from ..clone import clone_route_solution
 from ..serializers import (
     serialize_stop_short,
@@ -195,8 +198,10 @@ def update_route_stop_position(
     db.session.add_all(_dedupe_and_sort_stops(touched_stops))
     db.session.commit()
 
-    # Emit real-time events for all affected stops
+    # Emit real-time socket events for all affected stops (per-stop for precise UI updates).
+    # Notifications are suppressed here (notify=False) and batched into one below.
     team_id = route_solution.team_id
+    actor = db.session.get(User, ctx.user_id) if ctx.user_id else None
     all_affected_stops = _dedupe_and_sort_stops(touched_stops + refreshed_stops)
     for stop in all_affected_stops:
         create_route_solution_stop_event(
@@ -210,7 +215,14 @@ def update_route_stop_position(
                 "expected_departure_time": stop.expected_departure_time.isoformat() if stop.expected_departure_time else None,
             },
         )
-        emit_route_solution_stop_updated(stop)
+        emit_route_solution_stop_updated(stop, notify=False, actor=actor)
+
+    notify_route_solution_stops_batch_updated(
+        route_solution=route_solution,
+        affected_stop_count=len(all_affected_stops),
+        change_hint="stops_reordered",
+        actor=actor,
+    )
 
     return {
         "route_solution": serialize_route_solutions([route_solution], ctx),

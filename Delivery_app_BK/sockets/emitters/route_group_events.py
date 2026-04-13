@@ -1,4 +1,7 @@
-from Delivery_app_BK.models import RouteGroup, db
+from Delivery_app_BK.models import RouteGroup, User, db
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    resolve_route_plan_workflow_type,
+)
 from Delivery_app_BK.services.domain.route_operations.plan.route_freshness import get_route_freshness_updated_at
 from Delivery_app_BK.sockets.contracts.realtime import (
     BUSINESS_EVENT_ROUTE_GROUP_UPDATED,
@@ -8,7 +11,12 @@ from Delivery_app_BK.sockets.notifications import notify_delivery_planning_event
 from Delivery_app_BK.sockets.rooms.names import build_team_admin_room, build_team_members_room
 
 
-def emit_route_group_updated(route_group: RouteGroup, *, payload: dict | None = None) -> None:
+def emit_route_group_updated(
+    route_group: RouteGroup,
+    *,
+    payload: dict | None = None,
+    actor: User | None = None,
+) -> None:
     """Emit RouteGroup updated event. Broadcast to team_orders (admin visibility) and team_members (driver notification)."""
     if not route_group or not route_group.route_plan_id:
         return
@@ -32,6 +40,7 @@ def emit_route_group_updated(route_group: RouteGroup, *, payload: dict | None = 
             "route_group_id": route_group_id,
             "route_plan_id": route_plan_id,
             "label": route_plan.label,
+            "plan_type": resolve_route_plan_workflow_type(),
             "route_freshness_updated_at": get_route_freshness_updated_at(route_plan),
             **(payload or {}),
         },
@@ -49,5 +58,5 @@ def emit_route_group_updated(route_group: RouteGroup, *, payload: dict | None = 
         entity_id=route_group.id,
         payload=envelope["payload"],
         occurred_at=envelope["occurred_at"],
-        actor=None,
+        actor=actor,
     )

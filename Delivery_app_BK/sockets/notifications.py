@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 from hashlib import sha1
 
@@ -41,6 +42,7 @@ DELIVERY_PLANNING_NOTIFICATION_EVENT_NAMES = {
     "route_plan.updated",
     "route_plan.deleted",
     "route_group.updated",
+    "local_delivery_plan.updated",
     "route_solution.created",
     "route_solution.updated",
     "route_solution.deleted",
@@ -617,6 +619,7 @@ def _build_notification_title(event_name: str) -> str:
         "route_plan.updated": "Route plan updated",
         "route_plan.deleted": "Route plan deleted",
         "route_group.updated": "Route group updated",
+        "local_delivery_plan.updated": "Route group updated",
         "route_solution.created": "Route created",
         "route_solution.updated": "Route updated",
         "route_solution.deleted": "Route deleted",
@@ -625,65 +628,145 @@ def _build_notification_title(event_name: str) -> str:
     return mapping.get(event_name, "New update")
 
 
-def _build_notification_description(*, event_name: str, order: Order | None, payload: dict) -> str:
-    order_label = _build_order_label(order)
-    plan_label = _resolve_plan_label(payload)
-    route_label = _resolve_route_label(payload)
-    route_subject = _resolve_route_subject_label(payload)
+_DescriptionBuilder = Callable[[Order | None, dict], str]
 
-    if event_name == "order.created":
-        return f"{order_label} was created."
-    if event_name == "order.updated":
-        return _build_order_updated_description(order_label=order_label, payload=payload)
-    if event_name == "order.state_changed":
-        old_state_name = _resolve_old_order_state_name(payload=payload)
-        new_state_name = _resolve_new_order_state_name(payload=payload, order=order)
-        if old_state_name and new_state_name and old_state_name != new_state_name:
-            return f"{order_label} moved from {old_state_name} to {new_state_name}."
-        if new_state_name:
-            return f"{order_label} moved to {new_state_name}."
-        return f"{order_label} changed state."
-    if event_name == "order_case.created":
-        return f"A new case was created for {order_label}."
-    if event_name == "order_case.updated":
-        return f"A case for {order_label} was updated."
-    if event_name == "order_case.state_changed":
-        state = payload.get("state")
-        if isinstance(state, str) and state.strip():
-            return f"A case for {order_label} changed to {state.strip()}."
-        return f"A case for {order_label} changed state."
-    if event_name == "order_chat.message_created":
-        message = str(payload.get("message") or "").strip()
-        if message:
-            return message[:140]
-        return f"There is a new message for {order_label}."
-    if event_name == "route_plan.created":
-        return f"{plan_label} was created."
-    if event_name == "route_plan.updated":
-        return f"{plan_label} was updated."
-    if event_name == "route_plan.deleted":
-        return f"{plan_label} was deleted."
-    if event_name == "route_group.updated":
-        return f"{plan_label} was updated."
-    if event_name == "route_solution.created":
-        return f"{route_subject} was created."
-    if event_name == "route_solution.updated":
-        return f"{route_subject} was updated."
-    if event_name == "route_solution.deleted":
-        return f"{route_subject} was deleted."
-    if event_name == "route_solution_stop.updated":
-        stop_order = _parse_int(payload.get("stop_order"))
-        stop_label = f"Stop {stop_order}" if stop_order is not None else "A stop"
-        client_label = payload.get("notification_client_label")
-        arrival_label = payload.get("notification_arrival_label")
-        if client_label and arrival_label:
-            return f"{stop_label} on {route_label} — {client_label}, arriving {arrival_label}."
-        if client_label:
-            return f"{stop_label} on {route_label} — {client_label} was updated."
-        if arrival_label:
-            return f"{stop_label} on {route_label} — arriving {arrival_label}."
-        return f"{stop_label} on {route_label} was updated."
-    return "A new update is available."
+
+def _describe_order_created(order: Order | None, payload: dict) -> str:
+    return f"{_build_order_label(order)} was created."
+
+
+def _describe_order_updated(order: Order | None, payload: dict) -> str:
+    return _build_order_updated_description(
+        order_label=_build_order_label(order),
+        payload=payload,
+    )
+
+
+def _describe_order_state_changed(order: Order | None, payload: dict) -> str:
+    order_label = _build_order_label(order)
+    old_state_name = _resolve_old_order_state_name(payload=payload)
+    new_state_name = _resolve_new_order_state_name(payload=payload, order=order)
+    if old_state_name and new_state_name and old_state_name != new_state_name:
+        return f"{order_label} moved from {old_state_name} to {new_state_name}."
+    if new_state_name:
+        return f"{order_label} moved to {new_state_name}."
+    return f"{order_label} changed state."
+
+
+def _describe_order_case_created(order: Order | None, payload: dict) -> str:
+    return f"A new case was created for {_build_order_label(order)}."
+
+
+def _describe_order_case_updated(order: Order | None, payload: dict) -> str:
+    return f"A case for {_build_order_label(order)} was updated."
+
+
+def _describe_order_case_state_changed(order: Order | None, payload: dict) -> str:
+    state = payload.get("state")
+    order_label = _build_order_label(order)
+    if isinstance(state, str) and state.strip():
+        return f"A case for {order_label} changed to {state.strip()}."
+    return f"A case for {order_label} changed state."
+
+
+def _describe_order_chat_message_created(order: Order | None, payload: dict) -> str:
+    message = str(payload.get("message") or "").strip()
+    if message:
+        return message[:140]
+    return f"There is a new message for {_build_order_label(order)}."
+
+
+def _describe_route_plan_created(order: Order | None, payload: dict) -> str:
+    return f"{_resolve_plan_label(payload)} was created."
+
+
+def _describe_route_plan_updated(order: Order | None, payload: dict) -> str:
+    return f"{_resolve_plan_label(payload)} was updated."
+
+
+def _describe_route_plan_deleted(order: Order | None, payload: dict) -> str:
+    return f"{_resolve_plan_label(payload)} was deleted."
+
+
+def _describe_route_group_updated(order: Order | None, payload: dict) -> str:
+    plan_label = _resolve_plan_label(payload)
+    stop_count = payload.get("total_stops")
+    order_count = payload.get("total_orders")
+    if isinstance(stop_count, int) and isinstance(order_count, int):
+        return f"{plan_label} was updated - {order_count} orders across {stop_count} stops."
+    return f"{plan_label} was updated."
+
+
+def _describe_route_solution_created(order: Order | None, payload: dict) -> str:
+    return f"{_resolve_route_subject_label(payload)} was created."
+
+
+def _describe_route_solution_updated(order: Order | None, payload: dict) -> str:
+    route_subject = _resolve_route_subject_label(payload)
+    hint = payload.get("notification_change_hint")
+    if hint == "driver_assigned":
+        return f"{route_subject} - driver was assigned."
+    if hint == "route_optimized":
+        return f"{route_subject} was optimized."
+    if hint == "times_updated":
+        return f"{route_subject} - arrival times were updated."
+    return f"{route_subject} was updated."
+
+
+def _describe_route_solution_deleted(order: Order | None, payload: dict) -> str:
+    route_label = _resolve_route_label(payload)
+    plan_label = payload.get("plan_label")
+    if isinstance(plan_label, str) and plan_label.strip():
+        plan_type = payload.get("plan_type") or ""
+        prefix = (
+            "Local delivery plan" if plan_type == "local_delivery"
+            else "Route plan" if plan_type == "route_plan"
+            else "Plan"
+        )
+        return f'{route_label} on {prefix} "{plan_label.strip()}" was deleted.'
+    return f"{route_label} was deleted."
+
+
+def _describe_route_solution_stop_updated(order: Order | None, payload: dict) -> str:
+    route_label = _resolve_route_label(payload)
+    stop_order = _parse_int(payload.get("stop_order"))
+    stop_label = f"Stop {stop_order}" if stop_order is not None else "A stop"
+    client_label = payload.get("notification_client_label")
+    arrival_label = payload.get("notification_arrival_label")
+    if client_label and arrival_label:
+        return f"{stop_label} on {route_label} — {client_label}, arriving {arrival_label}."
+    if client_label:
+        return f"{stop_label} on {route_label} — {client_label} was updated."
+    if arrival_label:
+        return f"{stop_label} on {route_label} — arriving {arrival_label}."
+    return f"{stop_label} on {route_label} was updated."
+
+
+_DESCRIPTION_BUILDERS: dict[str, _DescriptionBuilder] = {
+    "order.created": _describe_order_created,
+    "order.updated": _describe_order_updated,
+    "order.state_changed": _describe_order_state_changed,
+    "order_case.created": _describe_order_case_created,
+    "order_case.updated": _describe_order_case_updated,
+    "order_case.state_changed": _describe_order_case_state_changed,
+    "order_chat.message_created": _describe_order_chat_message_created,
+    "route_plan.created": _describe_route_plan_created,
+    "route_plan.updated": _describe_route_plan_updated,
+    "route_plan.deleted": _describe_route_plan_deleted,
+    "route_group.updated": _describe_route_group_updated,
+    "local_delivery_plan.updated": _describe_route_group_updated,
+    "route_solution.created": _describe_route_solution_created,
+    "route_solution.updated": _describe_route_solution_updated,
+    "route_solution.deleted": _describe_route_solution_deleted,
+    "route_solution_stop.updated": _describe_route_solution_stop_updated,
+}
+
+
+def _build_notification_description(*, event_name: str, order: Order | None, payload: dict) -> str:
+    builder = _DESCRIPTION_BUILDERS.get(event_name)
+    if builder is None:
+        return "A new update is available."
+    return builder(order, payload)
 
 
 def _build_order_updated_description(*, order_label: str, payload: dict) -> str:
@@ -1022,6 +1105,7 @@ def _resolve_route_label(payload: dict) -> str:
 
 
 def _resolve_route_subject_label(payload: dict) -> str:
+    route_label = _resolve_route_label(payload)
     plan_label = payload.get("plan_label")
     if isinstance(plan_label, str) and plan_label.strip():
         plan_type = payload.get("plan_type")
@@ -1031,9 +1115,9 @@ def _resolve_route_subject_label(payload: dict) -> str:
             prefix = "Local delivery plan"
         else:
             prefix = "Delivery plan"
-        return f'{prefix} "{plan_label.strip()}"'
+        return f'{route_label} on {prefix} "{plan_label.strip()}"'
 
-    return _resolve_route_label(payload)
+    return route_label
 
 
 def _parse_int(value: object) -> int | None:

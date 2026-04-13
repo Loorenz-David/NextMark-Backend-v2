@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from Delivery_app_BK.models import Order, db
+from Delivery_app_BK.models import Order, User, db
 from Delivery_app_BK.sockets.notifications import notify_delivery_planning_event
 from Delivery_app_BK.services.commands.route_plan.local_delivery.route_solution.update_route_solution_from_plan import (
     update_route_solution_from_plan,
@@ -10,6 +10,9 @@ from Delivery_app_BK.services.commands.route_plan.local_delivery.route_solution.
 )
 from Delivery_app_BK.services.domain.route_operations.plan.route_freshness import touch_route_freshness
 from Delivery_app_BK.services.context import ServiceContext
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    resolve_route_plan_workflow_type,
+)
 from Delivery_app_BK.services.requests.route_plan.plan.local_delivery.update_settings import (
     RouteGroupSettingsRequest,
     RouteSolutionPatchRequest,
@@ -35,6 +38,7 @@ from Delivery_app_BK.sockets.emitters.route_solution_events import (
 )
 from Delivery_app_BK.sockets.emitters.route_solution_stop_events import (
     emit_route_solution_stop_updated,
+    notify_route_solution_stops_batch_updated,
 )
 from Delivery_app_BK.services.domain.vehicle.apply_vehicle_warnings import (
     apply_vehicle_warnings_to_route_solution,
@@ -171,6 +175,7 @@ def apply_route_group_settings_request(
 
     # Emit real-time events after commit
     team_id = getattr(ctx, "team_id", None)
+    actor = db.session.get(User, ctx.user_id) if ctx.user_id else None
 
     if plan_window_changed or route_plan_has_label:
         notify_delivery_planning_event(
@@ -182,6 +187,7 @@ def apply_route_group_settings_request(
             payload={
                 "route_plan_id": route_plan.id,
                 "label": route_plan.label,
+                "plan_type": resolve_route_plan_workflow_type(),
                 "date_strategy": route_plan.date_strategy,
                 "route_freshness_updated_at": route_plan.updated_at.isoformat() if route_plan.updated_at else None,
             },
@@ -201,7 +207,14 @@ def apply_route_group_settings_request(
                 "old_driver_id": old_route_solution_driver_id,
             },
         )
-        emit_route_solution_updated(route_solution, payload={"driver_id": getattr(route_solution, "driver_id", None)})
+        emit_route_solution_updated(
+            route_solution,
+            payload={
+                "driver_id": getattr(route_solution, "driver_id", None),
+                "notification_change_hint": "driver_assigned",
+            },
+            actor=actor,
+        )
     
     # Emit event if route_solution was modified (other than driver assignment)
     if route_solution_changed and getattr(route_solution, "driver_id", None) == old_route_solution_driver_id:
@@ -215,11 +228,19 @@ def apply_route_group_settings_request(
                 "label": route_solution.label,
             },
         )
-        emit_route_solution_updated(route_solution)
+        emit_route_solution_updated(
+            route_solution,
+            payload={"notification_change_hint": "route_optimized"},
+            actor=actor,
+        )
     
-    # Emit events for each affected stop
+    # Emit socket events for each affected stop (per-stop for precise UI updates).
+    # Notifications are suppressed (notify=False); the route-level emit above already
+    # notifies when settings changed. If only stops changed (not the route itself),
+    # the batch call below fires one notification instead of N.
     if stops_changed and route_solution.stops:
-        for stop in route_solution.stops:
+        affected_stops = list(route_solution.stops)
+        for stop in affected_stops:
             create_route_solution_stop_event(
                 ctx=ctx,
                 team_id=team_id,
@@ -231,7 +252,15 @@ def apply_route_group_settings_request(
                     "expected_departure_time": stop.expected_departure_time.isoformat() if stop.expected_departure_time else None,
                 },
             )
-            emit_route_solution_stop_updated(stop)
+            emit_route_solution_stop_updated(stop, notify=False, actor=actor)
+
+        if not route_solution_changed:
+            notify_route_solution_stops_batch_updated(
+                route_solution=route_solution,
+                affected_stop_count=len(affected_stops),
+                change_hint="settings_updated",
+                actor=actor,
+            )
 
     return build_route_group_settings_response(
         ctx=ctx,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from Delivery_app_BK.models import RouteSolution, db
+from Delivery_app_BK.models import RouteSolution, User, db
 from Delivery_app_BK.services.context import ServiceContext
 from Delivery_app_BK.services.domain.route_operations.local_delivery import resolve_actual_timestamp
 from Delivery_app_BK.services.queries.get_instance import get_instance
@@ -37,6 +37,7 @@ def mark_route_solution_actual_end_time(
     route_solution.actual_end_time = resolve_actual_timestamp(parsed.time)
     db.session.add(route_solution)
     db.session.commit()
+    actor = db.session.get(User, ctx.user_id) if ctx.user_id else None
 
     enqueue_job(
         queue_key="default",
@@ -57,7 +58,8 @@ def mark_route_solution_actual_end_time(
     )
     emit_route_solution_updated(route_solution, payload={
         "actual_end_time": route_solution.actual_end_time.isoformat() if route_solution.actual_end_time else None,
-    })
+        "notification_change_hint": "times_updated",
+    }, actor=actor)
 
     return {
         "route_solution": serialize_route_solutions([route_solution], ctx),

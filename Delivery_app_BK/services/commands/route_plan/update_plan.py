@@ -3,6 +3,9 @@ from uuid import uuid4
 
 from Delivery_app_BK.models import db, Order, RoutePlan, Team, RoutePlanState
 from Delivery_app_BK.sockets.notifications import notify_delivery_planning_event
+from Delivery_app_BK.services.domain.order.plan_objective_labels import (
+    resolve_route_plan_workflow_type,
+)
 from Delivery_app_BK.services.domain.route_operations.plan.route_freshness import touch_route_freshness
 from Delivery_app_BK.services.infra.events.builders.order import build_delivery_rescheduled_event
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
@@ -133,6 +136,7 @@ def update_plan(ctx: ServiceContext):
             payload={
                 "route_plan_id": instance.id,
                 "label": instance.label,
+                "plan_type": resolve_route_plan_workflow_type(),
                 "date_strategy": instance.date_strategy,
                 "route_freshness_updated_at": instance.updated_at.isoformat() if instance.updated_at else None,
             },

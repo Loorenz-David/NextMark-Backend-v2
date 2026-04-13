@@ -1,5 +1,5 @@
 from Delivery_app_BK.errors import ValidationFailed
-from Delivery_app_BK.models import RouteSolution, db
+from Delivery_app_BK.models import RouteSolution, User, db
 
 from Delivery_app_BK.services.context import ServiceContext
 from Delivery_app_BK.services.queries.get_instance import get_instance
@@ -40,6 +40,7 @@ def select_route_solution(ctx: ServiceContext, route_solution_id: int):
 
     # Emit real-time events
     team_id = route_solution.team_id
+    actor = db.session.get(User, ctx.user_id) if ctx.user_id else None
 
     for updated_route in updated or [route_solution]:
         create_route_solution_event(
@@ -51,7 +52,11 @@ def select_route_solution(ctx: ServiceContext, route_solution_id: int):
         )
         emit_route_solution_updated(
             updated_route,
-            payload={"is_selected": bool(updated_route.is_selected)},
+            payload={
+                "is_selected": bool(updated_route.is_selected),
+                "notification_change_hint": "route_optimized",
+            },
+            actor=actor,
         )
 
     return {

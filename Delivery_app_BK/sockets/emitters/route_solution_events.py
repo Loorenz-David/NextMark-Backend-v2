@@ -1,6 +1,6 @@
 from flask import current_app
 
-from Delivery_app_BK.models import RouteSolution, RouteGroup, db
+from Delivery_app_BK.models import RouteSolution, RouteGroup, User, db
 from Delivery_app_BK.services.domain.order.plan_objective_labels import (
     resolve_route_plan_workflow_type,
 )
@@ -14,7 +14,12 @@ from Delivery_app_BK.sockets.emitters.common import build_business_event_envelop
 from Delivery_app_BK.sockets.notifications import notify_delivery_planning_event
 from Delivery_app_BK.sockets.rooms.names import build_team_admin_room, build_team_members_room
 
-def emit_route_solution_created(route_solution: RouteSolution, *, payload: dict | None = None) -> None:
+def emit_route_solution_created(
+    route_solution: RouteSolution,
+    *,
+    payload: dict | None = None,
+    actor: User | None = None,
+) -> None:
     """Emit RouteSolution created event. Broadcast to team_orders (admin visibility) and team_members (driver notification)."""
     route_group_id = getattr(route_solution, "route_group_id", None)
     if route_group_id is None:
@@ -72,12 +77,17 @@ def emit_route_solution_created(route_solution: RouteSolution, *, payload: dict 
         entity_id=route_solution.id,
         payload=envelope["payload"],
         occurred_at=envelope["occurred_at"],
-        actor=None,
+        actor=actor,
     )
     current_app.logger.info("Emitted route_solution.created: solution_id=%d, team_id=%d", route_solution.id, team_id)
 
 
-def emit_route_solution_updated(route_solution: RouteSolution, *, payload: dict | None = None) -> None:
+def emit_route_solution_updated(
+    route_solution: RouteSolution,
+    *,
+    payload: dict | None = None,
+    actor: User | None = None,
+) -> None:
     """Emit RouteSolution updated event. Broadcast to team_orders (admin visibility) and team_members (driver notification)."""
     route_group_id = getattr(route_solution, "route_group_id", None)
     if route_group_id is None:
@@ -130,7 +140,7 @@ def emit_route_solution_updated(route_solution: RouteSolution, *, payload: dict 
         entity_id=route_solution.id,
         payload=envelope["payload"],
         occurred_at=envelope["occurred_at"],
-        actor=None,
+        actor=actor,
     )
     current_app.logger.info("Emitted route_solution.updated: solution_id=%d, team_id=%d", route_solution.id, team_id)
 
@@ -141,6 +151,7 @@ def emit_route_solution_deleted_for_route_group(
     route_solution_id: int,
     *,
     payload: dict | None = None,
+    actor: User | None = None,
 ) -> None:
     """Emit RouteSolution deleted event. Broadcast to team_orders (admin visibility) and team_members (driver notification)."""
     if not team_id or not route_group_id or not route_solution_id:
@@ -185,18 +196,26 @@ def emit_route_solution_deleted_for_route_group(
         entity_id=route_solution_id,
         payload=envelope["payload"],
         occurred_at=envelope["occurred_at"],
-        actor=None,
+        actor=actor,
     )
     current_app.logger.info("Emitted route_solution.deleted: solution_id=%d, team_id=%d", route_solution_id, team_id)
 
 
-def emit_route_solution_deleted(team_id: int, local_delivery_plan_id: int, route_solution_id: int, *, payload: dict | None = None) -> None:
+def emit_route_solution_deleted(
+    team_id: int,
+    local_delivery_plan_id: int,
+    route_solution_id: int,
+    *,
+    payload: dict | None = None,
+    actor: User | None = None,
+) -> None:
     """Backward-compatible wrapper for legacy callsites passing local_delivery_plan_id."""
     emit_route_solution_deleted_for_route_group(
         team_id=team_id,
         route_group_id=local_delivery_plan_id,
         route_solution_id=route_solution_id,
         payload=payload,
+        actor=actor,
     )
 
 
