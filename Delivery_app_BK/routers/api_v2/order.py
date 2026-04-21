@@ -18,6 +18,9 @@ from Delivery_app_BK.services.queries.order.list_order_markers import (
 from Delivery_app_BK.services.queries.order.get_order import (
     get_order as get_order_service,
 )
+from Delivery_app_BK.services.queries.order.get_order_route_context import (
+    get_order_route_context as get_order_route_context_service,
+)
 from Delivery_app_BK.services.queries.order.get_order_event_history import (
     get_order_event_history as get_order_event_history_service,
 )
@@ -54,13 +57,23 @@ from Delivery_app_BK.services.commands.order.unarchive_order import (
 order_bp = Blueprint("api_v2_order_bp", __name__)
 
 
+def _normalize_query_params():
+    normalized = {}
+    for raw_key, values in request.args.lists():
+        key = raw_key[:-2] if raw_key.endswith("[]") else raw_key
+        if not values:
+            continue
+        normalized[key] = values if len(values) > 1 else values[0]
+    return normalized
+
+
 @order_bp.route("/", methods=["GET"])
 @jwt_required()
 @role_required([ADMIN, ASSISTANT])
 def list_orders():
     identity = get_jwt()
     ctx = ServiceContext(
-        query_params=request.args.to_dict(),
+        query_params=_normalize_query_params(),
         identity=identity,
     )
     
@@ -83,7 +96,7 @@ def list_orders():
 def list_order_markers():
     identity = get_jwt()
     ctx = ServiceContext(
-        query_params=request.args.to_dict(),
+        query_params=_normalize_query_params(),
         identity=identity,
     )
 
@@ -105,7 +118,7 @@ def list_order_markers():
 def list_order_states():
     identity = get_jwt()
     ctx = ServiceContext(
-        query_params=request.args.to_dict(),
+        query_params=_normalize_query_params(),
         identity=identity,
     )
     outcome = run_service(lambda c: list_order_states_service(c), ctx)
@@ -245,10 +258,31 @@ def delete_order():
 def get_order(order_id: int):
     identity = get_jwt()
     ctx = ServiceContext(
-        query_params=request.args.to_dict(),
+        query_params=_normalize_query_params(),
         identity=identity,
     )
     outcome = run_service(lambda c: get_order_service(order_id, c), ctx)
+    response = Response()
+
+    if outcome.error:
+        return response.build_unsuccessful_response(outcome.error)
+
+    return response.build_successful_response(
+        outcome.data,
+        warnings=ctx.warnings,
+    )
+
+
+@order_bp.route("/<int:order_id>/route-context", methods=["GET"])
+@jwt_required()
+@role_required([ADMIN, ASSISTANT])
+def get_order_route_context(order_id: int):
+    identity = get_jwt()
+    ctx = ServiceContext(
+        query_params=_normalize_query_params(),
+        identity=identity,
+    )
+    outcome = run_service(lambda c: get_order_route_context_service(order_id, c), ctx)
     response = Response()
 
     if outcome.error:
@@ -266,7 +300,7 @@ def get_order(order_id: int):
 def get_order_event_history(order_id: int):
     identity = get_jwt()
     ctx = ServiceContext(
-        query_params=request.args.to_dict(),
+        query_params=_normalize_query_params(),
         identity=identity,
     )
     outcome = run_service(lambda c: get_order_event_history_service(order_id, c), ctx)
@@ -287,7 +321,7 @@ def get_order_event_history(order_id: int):
 def list_order_items(order_id: int):
     identity = get_jwt()
     ctx = ServiceContext(
-        query_params=request.args.to_dict(),
+        query_params=_normalize_query_params(),
         identity=identity,
     )
 

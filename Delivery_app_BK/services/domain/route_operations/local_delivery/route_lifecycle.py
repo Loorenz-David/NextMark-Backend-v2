@@ -126,6 +126,34 @@ def normalize_route_solution_stop_ordering(
     return changed_stops, first_changed_position
 
 
+def stage_route_solution_stop_order_updates(
+    changed_stops: Iterable[RouteSolutionStop] | None,
+) -> None:
+    """Apply stop_order changes in two phases to avoid transient unique collisions.
+
+    The `(route_solution_id, stop_order)` pair is unique. Reordering two or more
+    stops in place can briefly produce duplicates during flush/autoflush even if
+    the final ordering is valid. We first move touched rows to temporary negative
+    values, flush, and then restore the intended final positions.
+    """
+    touched_stops = list(changed_stops or [])
+    if not touched_stops:
+        return
+
+    final_positions = {id(stop): stop.stop_order for stop in touched_stops}
+
+    for idx, stop in enumerate(touched_stops, start=1):
+        stop.stop_order = -idx
+
+    db.session.add_all(touched_stops)
+    db.session.flush()
+
+    for stop in touched_stops:
+        stop.stop_order = final_positions[id(stop)]
+
+    db.session.add_all(touched_stops)
+
+
 def refresh_local_delivery_route_execution(
     route_solution_id: int | None,
     *,

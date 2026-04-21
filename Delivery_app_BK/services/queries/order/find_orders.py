@@ -1,10 +1,10 @@
 from typing import Dict, Any
 from sqlalchemy.orm import Query
 
-from Delivery_app_BK.models import db, Order, Item, DeliveryPlan, OrderDeliveryWindow
+from Delivery_app_BK.models import db, Order, Item, DeliveryPlan, OrderDeliveryWindow, OrderState
 from Delivery_app_BK.services.utils import inject_team_id, model_requires_team
 from Delivery_app_BK.services.queries.utils  import parsed_string_to_list
-from sqlalchemy import func, String, or_
+from sqlalchemy import func, String, false, or_
 
 from ...context import ServiceContext
 from ...utils import to_datetime
@@ -190,12 +190,36 @@ def find_orders (
         creation_date_to = to_datetime( params.get("creation_date_to" ) )
         query = query.filter( Order.creation_date <= creation_date_to )
 
-    if "order_state_id" in params:
-        order_state_ids = params.get( "order_state_id" )
-        if not isinstance( order_state_ids, ( list, tuple ) ):
-            order_state_ids = [ order_state_ids ] 
-            
-        query = query.filter( Order.order_state_id.in_( order_state_ids ) )
+    state_filter_values = _resolve_order_state_filter_values(params)
+    if state_filter_values:
+        order_state_ids = []
+        state_names = []
+        for value in state_filter_values:
+            if isinstance(value, int):
+                order_state_ids.append(value)
+                continue
+
+            stripped = str(value).strip()
+            if not stripped:
+                continue
+            if stripped.isdigit():
+                order_state_ids.append(int(stripped))
+            else:
+                state_names.append(stripped)
+
+        if state_names:
+            resolved_ids = (
+                db.session.query(OrderState.id)
+                .filter(OrderState.name.in_(state_names))
+                .all()
+            )
+            order_state_ids.extend(state_id for (state_id,) in resolved_ids)
+
+        deduped_ids = list(dict.fromkeys(order_state_ids))
+        if deduped_ids:
+            query = query.filter(Order.order_state_id.in_(deduped_ids))
+        else:
+            query = query.filter(false())
 
 
     #----------------------------------------------------
@@ -250,3 +274,14 @@ def find_orders (
 
     #----------------------------------------------------
     return query.distinct()
+
+
+def _resolve_order_state_filter_values(params: Dict[str, Any]) -> list[Any]:
+    for key in ("order_state_id", "order_state"):
+        if key not in params:
+            continue
+        values = params.get(key)
+        if isinstance(values, (list, tuple)):
+            return list(values)
+        return [values]
+    return []

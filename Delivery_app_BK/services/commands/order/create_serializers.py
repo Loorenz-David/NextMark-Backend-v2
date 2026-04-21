@@ -30,7 +30,7 @@ def serialize_created_order(instance: Order) -> dict:
     )
 
     route_plan_id = getattr(instance, "route_plan_id", None)
-    delivery_plan_id = getattr(instance, "delivery_plan_id", route_plan_id)
+    route_group_id = getattr(instance, "route_group_id", None)
 
     return {
         "id": instance.id,
@@ -54,7 +54,7 @@ def serialize_created_order(instance: Order) -> dict:
         "items_updated_at": instance.items_updated_at.isoformat() if instance.items_updated_at else None,
         "order_state_id": instance.order_state_id,
         "route_plan_id": route_plan_id,
-        "delivery_plan_id": delivery_plan_id,
+        "route_group_id": route_group_id,
         "costumer_id": instance.costumer_id,
         "delivery_windows": [
             {

@@ -10,13 +10,13 @@ from Delivery_app_BK.services.infra.events.builders.order import (
 )
 from Delivery_app_BK.models import (
     db,
-    DeliveryPlan,
     Item,
     ItemPosition,
     ItemState,
     Order,
     OrderDeliveryWindow,
     OrderState,
+    RoutePlan,
     Team,
 )
 
@@ -51,7 +51,7 @@ def create_order(ctx: ServiceContext):
         {
             "team_id": Team,
             "order_state_id": OrderState,
-            "delivery_plan_id": DeliveryPlan,
+            "delivery_plan_id": RoutePlan,
             "item_state_id": ItemState,
             "item_position_id": ItemPosition,
         }
@@ -63,7 +63,8 @@ def create_order(ctx: ServiceContext):
 
     pending_events: list[dict] = []
     created_bundles: list[dict] = []
-    touched_delivery_plans: dict[int, DeliveryPlan] = {}
+    touched_route_plans: dict[int, RoutePlan] = {}
+
     def _apply() -> None:
         team_timezone = resolve_order_delivery_windows_timezone(ctx)
         resolved_costumers = resolve_or_create_costumers(
@@ -103,7 +104,7 @@ def create_order(ctx: ServiceContext):
         )
         if len(resolved_costumers) != len(order_requests):
             raise ValidationFailed("Failed to resolve costumers for all orders.")
-        delivery_plans_by_id = _load_delivery_plans_by_id(
+        route_plans_by_id = _load_route_plans_by_id(
             ctx,
             [
                 request.delivery_plan_id
@@ -135,14 +136,14 @@ def create_order(ctx: ServiceContext):
                     normalized_windows,
                     team_timezone=team_timezone,
                 )
-            delivery_plan = (
-                delivery_plans_by_id.get(order_request.delivery_plan_id)
+            route_plan = (
+                route_plans_by_id.get(order_request.delivery_plan_id)
                 if order_request.delivery_plan_id is not None
                 else None
             )
-            resolved_delivery_plan_id = None
-            if delivery_plan:
-                resolved_delivery_plan_id = delivery_plan.id
+            resolved_route_plan_id = None
+            if route_plan:
+                resolved_route_plan_id = route_plan.id
                 if not order_fields.get("order_plan_objective"):
                     order_fields["order_plan_objective"] = resolve_effective_order_plan_objective(
                         None,
@@ -154,11 +155,11 @@ def create_order(ctx: ServiceContext):
             order_instance.costumer_id = resolved_costumer.id
             if order_instance.costumer_id is None:
                 raise ValidationFailed("Order must belong to a costumer.")
-            if resolved_delivery_plan_id is not None:
-                order_instance.delivery_plan_id = resolved_delivery_plan_id
-                order_instance.route_plan = delivery_plan
-                if delivery_plan is not None:
-                    touched_delivery_plans[delivery_plan.id] = delivery_plan
+            if resolved_route_plan_id is not None:
+                order_instance.route_plan_id = resolved_route_plan_id
+                order_instance.route_plan = route_plan
+                if route_plan is not None:
+                    touched_route_plans[route_plan.id] = route_plan
             order_instances.append(order_instance)
 
             # Auto-generate public tracking identifiers (once, on creation).
@@ -187,14 +188,14 @@ def create_order(ctx: ServiceContext):
                 order_instance.items_updated_at = datetime.now(timezone.utc)
                 recompute_order_totals(order_instance)
 
-            if delivery_plan is not None:
-                recompute_plan_totals(delivery_plan)
+            if route_plan is not None:
+                recompute_plan_totals(route_plan)
 
-            if delivery_plan:
+            if route_plan:
                 objective_result = apply_order_plan_objective(
                     ctx=ctx,
                     order_instance=order_instance,
-                    delivery_plan=delivery_plan,
+                    route_plan=route_plan,
                     plan_objective=resolve_effective_order_plan_objective(
                         order_instance.order_plan_objective,
                         has_route_plan=True,
@@ -220,9 +221,9 @@ def create_order(ctx: ServiceContext):
         if post_flush_actions:
             db.session.flush()
 
-        for delivery_plan in touched_delivery_plans.values():
-            touch_route_freshness(delivery_plan)
-        if touched_delivery_plans:
+        for route_plan in touched_route_plans.values():
+            touch_route_freshness(route_plan)
+        if touched_route_plans:
             db.session.flush()
 
         for order_instance in order_instances:
@@ -260,23 +261,23 @@ def create_order(ctx: ServiceContext):
             "total_items": plan.total_item_count,
             "total_orders": plan.total_orders,
         }
-        for plan in touched_delivery_plans.values()
+        for plan in touched_route_plans.values()
         if plan.id is not None
     ]
     return {"created": created_bundles, "plan_totals": plan_totals}
 
 
-def _load_delivery_plans_by_id(
+def _load_route_plans_by_id(
     ctx: ServiceContext,
     plan_ids: list[int],
-) -> dict[int, DeliveryPlan]:
+) -> dict[int, RoutePlan]:
     deduped_plan_ids = list(dict.fromkeys(plan_ids))
     if not deduped_plan_ids:
         return {}
 
-    query = db.session.query(DeliveryPlan).filter(DeliveryPlan.id.in_(deduped_plan_ids))
+    query = db.session.query(RoutePlan).filter(RoutePlan.id.in_(deduped_plan_ids))
     if ctx.team_id:
-        query = query.filter(DeliveryPlan.team_id == ctx.team_id)
+        query = query.filter(RoutePlan.team_id == ctx.team_id)
     plans = query.all()
 
     plans_by_id = {plan.id: plan for plan in plans}

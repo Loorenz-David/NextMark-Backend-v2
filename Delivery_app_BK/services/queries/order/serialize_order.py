@@ -44,7 +44,8 @@ def _serialize_order_instance(instance: Order, ctx: ServiceContext, include_item
         "updated_at": instance.updated_at.isoformat() if instance.updated_at else None,
         "items_updated_at": instance.items_updated_at.isoformat() if instance.items_updated_at else None,
         "order_state_id": instance.order_state_id,
-        "delivery_plan_id": instance.delivery_plan_id,
+        "route_plan_id": instance.route_plan_id,
+        "route_group_id": instance.route_group_id,
         "costumer_id": instance.costumer_id,
         "delivery_windows": [
             {

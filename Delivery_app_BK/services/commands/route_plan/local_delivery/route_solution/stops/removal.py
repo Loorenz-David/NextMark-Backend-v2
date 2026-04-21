@@ -5,6 +5,7 @@ from collections import defaultdict
 from Delivery_app_BK.models import RouteSolution, RouteSolutionStop, db
 from Delivery_app_BK.services.domain.route_operations.local_delivery.route_lifecycle import (
     normalize_route_solution_stop_ordering,
+    stage_route_solution_stop_order_updates,
     sync_route_solution_stop_count,
 )
 
@@ -76,6 +77,7 @@ def remove_orders_stops_for_local_delivery(
         )
         route_solution.stops = remaining
         normalized_stops, _ = normalize_route_solution_stop_ordering(route_solution)
+        stage_route_solution_stop_order_updates(normalized_stops)
         updated_stops.extend(normalized_stops)
         sync_route_solution_stop_count(route_solution)
 

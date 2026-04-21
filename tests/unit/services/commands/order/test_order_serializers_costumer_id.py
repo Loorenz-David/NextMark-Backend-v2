@@ -31,6 +31,8 @@ def _build_order_instance():
         updated_at=None,
         items_updated_at=None,
         order_state_id=1,
+        route_plan_id=42,
+        route_group_id=7,
         delivery_plan_id=None,
         archive_at=None,
         order_cases=[],
@@ -73,6 +75,23 @@ def test_serialize_orders_includes_costumer_id(monkeypatch):
     serialized = list_module.serialize_orders([_build_order_instance()], SimpleNamespace())
 
     assert serialized[0]["costumer_id"] == 77
+
+
+def test_order_serializers_expose_canonical_route_fields(monkeypatch):
+    monkeypatch.setattr(create_module, "calculate_order_metrics", lambda _order: {})
+    monkeypatch.setattr(list_module, "calculate_order_metrics", lambda _order: {})
+    monkeypatch.setattr(list_module, "map_return_values", lambda values, _ctx, _key: values)
+
+    created = create_module.serialize_created_order(_build_order_instance())
+    listed = list_module.serialize_orders([_build_order_instance()], SimpleNamespace())
+
+    assert created["route_plan_id"] == 42
+    assert created["route_group_id"] == 7
+    assert "delivery_plan_id" not in created
+
+    assert listed[0]["route_plan_id"] == 42
+    assert listed[0]["route_group_id"] == 7
+    assert "delivery_plan_id" not in listed[0]
 
 
 def test_serializers_include_sorted_delivery_windows(monkeypatch):
