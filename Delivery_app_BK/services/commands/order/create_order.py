@@ -16,6 +16,7 @@ from Delivery_app_BK.models import (
     OrderDeliveryWindow,
     OrderState,
     RoutePlan,
+    RouteGroup,
     Team,
 )
 
@@ -51,6 +52,7 @@ def create_order(ctx: ServiceContext):
             "team_id": Team,
             "order_state_id": OrderState,
             "delivery_plan_id": RoutePlan,
+            "route_group_id": RouteGroup,
             "item_state_id": ItemState,
         }
     )

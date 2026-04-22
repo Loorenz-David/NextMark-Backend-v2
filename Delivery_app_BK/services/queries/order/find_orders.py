@@ -221,6 +221,20 @@ def find_orders (
         else:
             query = query.filter(false())
 
+    plan_type_filter_values = _resolve_plan_type_filter_values(params, ctx)
+    if plan_type_filter_values:
+        normalized_plan_types = []
+        for value in plan_type_filter_values:
+            stripped = str(value).strip()
+            if stripped:
+                normalized_plan_types.append(stripped)
+
+        deduped_plan_types = list(dict.fromkeys(normalized_plan_types))
+        if deduped_plan_types:
+            query = query.filter(Order.order_plan_objective.in_(deduped_plan_types))
+        else:
+            query = query.filter(false())
+
 
     #----------------------------------------------------
 
@@ -285,3 +299,34 @@ def _resolve_order_state_filter_values(params: Dict[str, Any]) -> list[Any]:
             return list(values)
         return [values]
     return []
+
+
+def _resolve_plan_type_filter_values(params: Dict[str, Any], ctx: ServiceContext) -> list[Any]:
+    query_params = getattr(ctx, "query_params", None)
+    if query_params is not None and hasattr(query_params, "getlist"):
+        values = query_params.getlist("plan_type[]")
+        if values:
+            return values
+
+        values = query_params.getlist("plan_type")
+        if values:
+            return values
+
+    if "plan_type[]" in params:
+        values = params.get("plan_type[]")
+        if isinstance(values, (list, tuple)):
+            return list(values)
+        return [values]
+
+    if "plan_type" not in params:
+        return []
+
+    values = params.get("plan_type")
+    if isinstance(values, (list, tuple)):
+        return list(values)
+
+    parsed_values = parsed_string_to_list(values, ctx)
+    if isinstance(parsed_values, list):
+        return parsed_values
+
+    return [values]
