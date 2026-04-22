@@ -143,6 +143,21 @@ def test_parse_create_order_preserves_delivery_windows_payload():
     assert parsed.delivery_windows[0]["window_type"] == "FULL_RANGE"
 
 
+def test_parse_create_order_accepts_item_position_as_string_label():
+    parsed = parse_create_order_request(
+        {
+            "items": [
+                {
+                    "article_number": "SKU-1",
+                    "item_position": "front_left",
+                }
+            ]
+        }
+    )
+
+    assert parsed.items[0].fields["item_position"] == "front_left"
+
+
 def test_parse_create_order_delivery_windows_null_means_explicit_clear():
     parsed = parse_create_order_request({"delivery_windows": None})
     assert parsed.delivery_windows == []

@@ -23,6 +23,7 @@ def _load_blueprints():
     from .external_integration import external_integration_bp
     from .infrastructure import infrastructure_bp
     from .integration_email import email_bp
+    from .integration_logistic import logistic_bp
     from .integration_shopify import shopify_bp
     from .integration_twilio import twilio_bp
     from .integrations import integrations_bp
@@ -115,6 +116,7 @@ def _load_blueprints():
             "integrations_bp": integrations_bp,
             "twilio_bp": twilio_bp,
             "email_bp": email_bp,
+            "logistic_bp": logistic_bp,
             "route_operations_bp": route_operations_bp,
             "plan_overviews_bp": plan_overviews_bp,
             "costumer_bp": costumer_bp,
@@ -167,6 +169,7 @@ def register_v2_blueprints(app):
     app.register_blueprint(bp["integrations_bp"], url_prefix="/api_v2/integrations")
     app.register_blueprint(bp["twilio_bp"], url_prefix="/api_v2/twilio")
     app.register_blueprint(bp["email_bp"], url_prefix="/api_v2/email")
+    app.register_blueprint(bp["logistic_bp"], url_prefix="/api_v2/logistic")
     app.register_blueprint(bp["route_operations_bp"], url_prefix="/api_v2/route_operations")
     app.register_blueprint(bp["plan_overviews_bp"], url_prefix="/api_v2/route_plan_overviews")
     app.register_blueprint(bp["costumer_bp"], url_prefix="/api_v2/costumers")

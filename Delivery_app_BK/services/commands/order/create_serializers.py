@@ -81,7 +81,7 @@ def serialize_created_items(instances: list[Item]) -> list[dict]:
             "reference_number": instance.reference_number,
             "item_type": instance.item_type,
             "item_state_id": instance.item_state_id,
-            "item_position_id": instance.item_position_id,
+            "item_position": instance.item_position,
             "order_id": instance.order_id,
             "properties": instance.properties,
             "page_link": instance.page_link,

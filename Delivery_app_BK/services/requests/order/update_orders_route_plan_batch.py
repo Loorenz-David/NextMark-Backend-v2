@@ -68,7 +68,7 @@ ALLOWED_ITEMS_FILTERS = {
     "article_number",
     "item_type",
     "item_state_id",
-    "item_position_id",
+    "item_position",
     "order_id",
     "weight_min",
     "weight_max",
@@ -86,8 +86,15 @@ INT_OR_INT_LIST_FILTER_KEYS = {
 
 ITEM_INT_OR_INT_LIST_FILTER_KEYS = {
     "item_state_id",
-    "item_position_id",
     "order_id",
+}
+
+ITEM_STRING_FILTER_KEYS = {
+    "q",
+    "client_id",
+    "article_number",
+    "item_type",
+    "item_position",
 }
 
 ITEM_NUMERIC_FILTER_KEYS = {
@@ -305,7 +312,7 @@ def _sanitize_items_query(value: Any, *, field: str) -> dict[str, Any]:
         if raw is None or raw == "":
             continue
 
-        if key in {"q", "client_id", "article_number", "item_type"}:
+        if key in ITEM_STRING_FILTER_KEYS:
             if not isinstance(raw, str):
                 raise ValidationFailed(f"{field}.{key} must be a string.")
             trimmed = raw.strip()

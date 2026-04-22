@@ -117,6 +117,28 @@ def test_parse_batch_selection_payload_accepts_route_plan_id_alias():
     assert parsed.select_all_snapshots[0].query["route_plan_id"] == 42
 
 
+def test_parse_batch_selection_payload_accepts_item_position_string_filter():
+    parsed = parse_update_orders_route_plan_batch_payload(
+        {
+            "selection": {
+                "manual_order_ids": [],
+                "excluded_order_ids": [],
+                "select_all_snapshots": [
+                    {
+                        "query": {
+                            "items": {
+                                "item_position": "front_left",
+                            }
+                        }
+                    }
+                ],
+            }
+        }
+    )
+
+    assert parsed.select_all_snapshots[0].query["items"]["item_position"] == "front_left"
+
+
 def test_parse_batch_selection_payload_rejects_mismatched_plan_aliases():
     with pytest.raises(ValidationFailed):
         parse_update_orders_route_plan_batch_payload(

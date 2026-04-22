@@ -45,3 +45,7 @@ def should_sync_shopify_order_costumer(order: Any, submitted_fields: dict[str, A
 
 def should_fulfill_shopify_order(order: Any) -> bool:
     return is_shopify_order(order)
+
+
+def should_notify_order_schedule(order: Any) -> bool:
+    return bool(getattr(order, "external_order_id", None))

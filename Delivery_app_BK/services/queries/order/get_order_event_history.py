@@ -12,6 +12,8 @@ def _serialize_action(action) -> dict:
         "event_id": action.event_id,
         "team_id": action.team_id,
         "action_name": action.action_name,
+        "action_scope": action.action_scope,
+        "payload": action.payload or {},
         "status": action.status,
         "attempts": action.attempts,
         "last_error": action.last_error,

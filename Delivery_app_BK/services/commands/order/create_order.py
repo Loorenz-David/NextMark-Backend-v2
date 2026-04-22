@@ -11,7 +11,6 @@ from Delivery_app_BK.services.infra.events.builders.order import (
 from Delivery_app_BK.models import (
     db,
     Item,
-    ItemPosition,
     ItemState,
     Order,
     OrderDeliveryWindow,
@@ -53,7 +52,6 @@ def create_order(ctx: ServiceContext):
             "order_state_id": OrderState,
             "delivery_plan_id": RoutePlan,
             "item_state_id": ItemState,
-            "item_position_id": ItemPosition,
         }
     )
 

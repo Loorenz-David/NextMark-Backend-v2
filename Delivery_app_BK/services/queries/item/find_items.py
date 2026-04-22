@@ -38,11 +38,11 @@ def find_items(
             state_ids = [state_ids]
         query = query.filter(Item.item_state_id.in_(state_ids))
 
-    if "item_position_id" in params:
-        position_ids = params.get("item_position_id")
-        if not isinstance(position_ids, (list, tuple)):
-            position_ids = [position_ids]
-        query = query.filter(Item.item_position_id.in_(position_ids))
+    if "item_position" in params:
+        position_names = params.get("item_position")
+        if not isinstance(position_names, (list, tuple)):
+            position_names = [position_names]
+        query = query.filter(Item.item_position.in_(position_names))
 
     if "order_id" in params:
         order_ids = params.get("order_id")

@@ -1,7 +1,6 @@
 from Delivery_app_BK.models import (
     db,
     Item,
-    ItemPosition,
     ItemState,
     Order,
     RoutePlan,
@@ -9,8 +8,9 @@ from Delivery_app_BK.models import (
 )
 from ....context import ServiceContext
 from ...base.create_instance import create_instance
-from ...utils import extract_fields, build_create_result
+from ...utils import extract_fields
 from ....queries.get_instance import get_instance
+from Delivery_app_BK.services.domain.item.item_states import ItemStateId
 from Delivery_app_BK.services.domain.item.order_item_freshness import (
     touch_orders_items_updated_at,
 )
@@ -21,13 +21,13 @@ from Delivery_app_BK.services.domain.route_operations.plan.route_freshness impor
 from Delivery_app_BK.services.infra.events.builders.order import build_order_edited_event
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
 from Delivery_app_BK.sockets.emitters.route_plan_events import emit_delivery_plan_totals_updated
+from Delivery_app_BK.services.commands.order.create_serializers import serialize_created_items
 
 
 def create_item(ctx: ServiceContext):
     relationship_map = {
         "order_id": Order,
         "item_state_id": ItemState,
-        "item_position_id": ItemPosition,
         "team_id": Team
     }
     ctx.set_relationship_map(relationship_map)
@@ -35,12 +35,15 @@ def create_item(ctx: ServiceContext):
     touched_orders: list[Order] = []
 
     for field_set in extract_fields(ctx):
-        instance = create_instance(ctx, Item, dict(field_set))
+        fields = dict(field_set)
+        if not fields.get("item_state_id"):
+            fields["item_state_id"] = ItemStateId.OPEN
+        instance = create_instance(ctx, Item, fields)
         instances.append(instance)
         # link_using_foreign_key only sets item.order_id (int), NOT item.order.
         # instance.order is None on a new pending instance, so we must look up
         # the Order directly from the request field to build touched_orders.
-        order_id = field_set.get("order_id")
+        order_id = fields.get("order_id")
         if order_id is not None:
             order = get_instance(ctx, Order, order_id)
             if order is not None:
@@ -61,11 +64,10 @@ def create_item(ctx: ServiceContext):
         touch_route_freshness_by_order(order)
     _recompute_affected_plans(_unique_orders(touched_orders))
     db.session.flush()
-    result = build_create_result(ctx, instances)
     db.session.commit()
     _emit_item_update_events(ctx, touched_orders)
     _emit_plan_totals_events(_unique_orders(touched_orders))
-    return {"item": result, "_affected_orders": _unique_orders(touched_orders)}
+    return {"item": serialize_created_items(instances), "_affected_orders": _unique_orders(touched_orders)}
 
 
 def _unique_orders(orders: list[Order]) -> list[Order]:

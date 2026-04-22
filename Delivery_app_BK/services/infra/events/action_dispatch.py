@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 
 from Delivery_app_BK.models import RoutePlanEventAction, OrderEventAction, db
 from Delivery_app_BK.services.infra.jobs import MESSAGING_RETRY_POLICY, enqueue_job, schedule_job
+from Delivery_app_BK.services.infra.tasks.order.notify_order_schedule_action import (
+    notify_order_schedule_action,
+)
 from Delivery_app_BK.services.infra.tasks.route_plan.send_email import send_email as send_route_plan_email
 from Delivery_app_BK.services.infra.tasks.route_plan.send_sms import send_sms as send_route_plan_sms
 from Delivery_app_BK.services.infra.tasks.order.send_email import send_email as send_order_email
@@ -35,6 +38,8 @@ def enqueue_route_plan_action(action: RoutePlanEventAction) -> None:
 
 
 def _resolve_order_action_task(action_name: str):
+    if action_name == "order_schedule_notify":
+        return notify_order_schedule_action
     if action_name.endswith("_sms"):
         return send_order_sms
     if action_name.endswith("_email"):

@@ -31,10 +31,7 @@ class Item(db.Model, TeamScopedMixin):
         ForeignKey("order.id", ondelete="CASCADE")
     )
 
-    item_position_id = Column(
-        Integer,
-        ForeignKey("item_position.id")
-    )
+    item_position = Column(String, nullable=True, index=True)
 
     item_state_id = Column(
         Integer,
@@ -50,11 +47,6 @@ class Item(db.Model, TeamScopedMixin):
     item_state = relationship(
         "ItemState",
         back_populates="items"
-    )
-
-    item_position = relationship(
-        "ItemPosition",
-        backref="items"
     )
 
     order = relationship(

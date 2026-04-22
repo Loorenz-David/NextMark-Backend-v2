@@ -52,6 +52,11 @@ class Config:
     WEB_PUSH_VAPID_PRIVATE_KEY = os.environ.get("WEB_PUSH_VAPID_PRIVATE_KEY")
     WEB_PUSH_VAPID_SUBJECT = os.environ.get("WEB_PUSH_VAPID_SUBJECT", "mailto:admin@nextmark.app")
 
+    # ------------------------------------------------------------------
+    # Integrations
+    # ------------------------------------------------------------------
+    LOGISTIC_API_KEY = os.environ.get("LOGISTIC_API_KEY")
+
 
 
 def resolve_env_path(config_name: str) -> str | None:

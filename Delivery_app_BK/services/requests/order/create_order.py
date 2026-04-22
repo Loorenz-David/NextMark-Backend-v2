@@ -61,7 +61,7 @@ ITEM_ALLOWED_FIELDS = {
     "item_type",
     "properties",
     "quantity",
-    "item_position_id",
+    "item_position",
     "item_state_id",
     "page_link",
     "dimension_depth",
@@ -92,12 +92,12 @@ ORDER_OPTIONAL_STRING_FIELDS = {
 ITEM_OPTIONAL_STRING_FIELDS = {
     "reference_number",
     "item_type",
+    "item_position",
     "page_link",
 }
 
 ITEM_OPTIONAL_INT_FIELDS = {
     "quantity",
-    "item_position_id",
     "item_state_id",
     "dimension_depth",
     "dimension_height",

@@ -187,16 +187,16 @@ def update_item_state(item_id: int, state_id: int):
     )
 
 
-@item_bp.route("/<int:item_id>/position/<int:position_id>", methods=["PATCH"])
+@item_bp.route("/<int:item_id>/position/<string:position_name>", methods=["PATCH"])
 @jwt_required()
 @role_required([ADMIN, ASSISTANT])
-def update_item_position(item_id: int, position_id: int):
+def update_item_position(item_id: int, position_name: str):
     identity = get_jwt()
     ctx = ServiceContext(
         identity=identity,
     )
     outcome = run_service(
-        lambda c: update_item_position_service(c, item_id, position_id),
+        lambda c: update_item_position_service(c, item_id, position_name),
         ctx,
     )
     response = Response()

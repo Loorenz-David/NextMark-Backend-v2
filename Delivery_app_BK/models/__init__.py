@@ -61,6 +61,7 @@ from .tables.content_templates.label_template import LabelTemplate
 from .tables.integrations.shopify_integration import OAuthState
 from .tables.integrations.shopify_integration import ShopifyIntegration
 from .tables.integrations.shopify_integration import ShopifyWebhookEvents
+from .tables.integrations.order_schedule_target import OrderScheduleTarget
 from .tables.analytics.route_metrics_snapshot import RouteMetricsSnapshot as AnalyticsRouteMetricsSnapshot
 from .tables.analytics.analytics_daily_fact import AnalyticsDailyFact
 from .tables.zones.zone_version import ZoneVersion

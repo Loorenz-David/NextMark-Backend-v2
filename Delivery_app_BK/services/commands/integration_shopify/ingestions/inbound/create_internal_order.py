@@ -4,6 +4,11 @@ from Delivery_app_BK.services.queries.integration_shopify import get_integration
 from Delivery_app_BK.services.context import ServiceContext
 from Delivery_app_BK.services.commands.order import create_order
 from Delivery_app_BK.services.commands.costumer.create_costumer import create_costumer
+from Delivery_app_BK.services.domain.order.shopify_intent_sku import (
+        FLAG_SKUS_TO_EXCLUDE,
+        INTENT_SKU_TO_PLAN_OBJECTIVE,
+        resolve_intent_from_shopify_line_items,
+)
 from ..mappers import item_mapper, order_mapper
 
 def create_internal_order(
@@ -22,8 +27,19 @@ def create_internal_order(
 
         line_items = payload.get("line_items") or []
         items = [ item_mapper(item) for item in line_items]
+        plan_objective, should_suppress = resolve_intent_from_shopify_line_items(line_items)
+
+        if should_suppress:
+                return
+
+        reserved_skus = set(INTENT_SKU_TO_PLAN_OBJECTIVE) | set(FLAG_SKUS_TO_EXCLUDE)
+        items = [
+                item for item in items
+                if str(item.get("article_number")).strip().upper() not in reserved_skus
+        ]
 
         order['items'] = items
+        order["order_plan_objective"] = plan_objective
         identity = {'team_id': shopify_shop.team_id}
 
         if isinstance(customer_payload, dict):

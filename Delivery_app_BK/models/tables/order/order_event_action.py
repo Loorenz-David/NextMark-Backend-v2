@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Column, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from Delivery_app_BK.models import db
@@ -19,6 +20,8 @@ class OrderEventAction(db.Model, TeamScopedMixin):
     id = Column(Integer, primary_key=True)
     
     action_name = Column(String, nullable=False)
+    action_scope = Column(String, nullable=False, default="", index=True)
+    payload = Column(JSONB().with_variant(JSON, "sqlite"), nullable=True)
 
     status = Column(String, nullable=False, index=True, default=STATUS_PENDING)
     attempts = Column(Integer, nullable=False, default=0)
@@ -47,5 +50,5 @@ class OrderEventAction(db.Model, TeamScopedMixin):
     team = relationship("Team", backref="order_event_actions", lazy=True)
 
     __table_args__ = (
-        UniqueConstraint("event_id", "action_name", name="uq_order_event_action_event_name"),
+        UniqueConstraint("event_id", "action_name", "action_scope", name="uq_order_event_action_event_scope"),
     )
