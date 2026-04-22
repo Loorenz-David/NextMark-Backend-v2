@@ -127,6 +127,11 @@ def create_order(ctx: ServiceContext):
         ):
             order_fields = dict(order_request.fields)
             order_fields["order_scalar_id"] = order_scalar_id
+            if not order_fields.get("order_plan_objective"):
+                order_fields["order_plan_objective"] = resolve_effective_order_plan_objective(
+                    None,
+                    fallback="local_delivery",
+                )
             normalized_windows = None
             if order_request.delivery_windows is not None:
                 normalized_windows = validate_and_normalize_delivery_windows(
@@ -144,11 +149,6 @@ def create_order(ctx: ServiceContext):
             resolved_route_plan_id = None
             if route_plan:
                 resolved_route_plan_id = route_plan.id
-                if not order_fields.get("order_plan_objective"):
-                    order_fields["order_plan_objective"] = resolve_effective_order_plan_objective(
-                        None,
-                        has_route_plan=True,
-                    )
             order_fields.pop("delivery_plan_id", None)
 
             order_instance: Order = create_instance(ctx, Order, order_fields)
