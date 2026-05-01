@@ -54,15 +54,18 @@ class RouteSolutionStop(db.Model, TeamScopedMixin, ServiceTimeJSONValidationMixi
     )
     
     expected_arrival_time = Column(UTCDateTime)
+    actual_arrival_time = Column(UTCDateTime)
+    
     expected_service_duration_seconds = Column(Integer)
     # expected_departure_time is derived from:
     # expected_arrival_time + expected_service_duration_seconds
     # It represents when the vehicle leaves the stop after service.
     expected_departure_time = Column(UTCDateTime)
-    actual_arrival_time = Column(UTCDateTime)
+    actual_departure_time = Column(UTCDateTime)
+   
     # Future: used to compute service duration
     # service_duration_seconds = actual_departure_time - actual_arrival_time
-    actual_departure_time = Column(UTCDateTime)
+   
     updated_at = Column(
         UTCDateTime,
         default=lambda: datetime.now(timezone.utc),
