@@ -416,12 +416,12 @@ def _resolve_stop_service_duration_seconds(
         default_service_time,
     )
     if effective_service_time is not None:
-        service_minutes = calculate_service_time_seconds(
+        service_seconds = calculate_service_time_seconds(
             effective_service_time,
             item_quantity,
         )
-        if service_minutes is not None:
-            return int(service_minutes) * 60
+        if service_seconds is not None:
+            return int(service_seconds)
     return parse_duration_seconds(getattr(stop, "service_duration", None))
 
 

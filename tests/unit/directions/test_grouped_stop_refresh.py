@@ -21,12 +21,12 @@ def _make_order(order_id: int, lat: float, lng: float):
     )
 
 
-def _make_stop(stop_id: int, order_id: int, stop_order: int, minutes: int):
+def _make_stop(stop_id: int, order_id: int, stop_order: int, seconds: int):
     return SimpleNamespace(
         id=stop_id,
         order_id=order_id,
         stop_order=stop_order,
-        service_time={"time": minutes, "per_item": 0},
+        service_time={"time": seconds, "per_item": 0},
         service_duration=None,
         expected_arrival_time=None,
         eta_status="stale",
@@ -76,9 +76,9 @@ def test_build_directions_request_bundle_collapses_contiguous_same_coordinate_st
         order_3.id: order_3,
     }
     stops = [
-        _make_stop(1, 101, 1, 10),
-        _make_stop(2, 102, 2, 5),
-        _make_stop(3, 103, 3, 7),
+        _make_stop(1, 101, 1, 600),
+        _make_stop(2, 102, 2, 300),
+        _make_stop(3, 103, 3, 420),
     ]
     route_solution = _make_route_solution(stops)
 
@@ -104,9 +104,9 @@ def test_apply_directions_result_expands_grouped_visit_arrivals_and_polylines():
         order_2.id: order_2,
         order_3.id: order_3,
     }
-    stop_1 = _make_stop(1, 101, 1, 10)
-    stop_2 = _make_stop(2, 102, 2, 5)
-    stop_3 = _make_stop(3, 103, 3, 7)
+    stop_1 = _make_stop(1, 101, 1, 600)
+    stop_2 = _make_stop(2, 102, 2, 300)
+    stop_3 = _make_stop(3, 103, 3, 420)
     stop_1.order = order_1
     stop_2.order = order_2
     stop_3.order = order_3
@@ -159,7 +159,7 @@ def test_apply_directions_result_expands_grouped_visit_arrivals_and_polylines():
 def test_build_directions_request_bundle_treats_set_start_time_as_team_local_wall_clock():
     order = _make_order(101, 57.700001, 11.970001)
     orders_by_id = {order.id: order}
-    stop = _make_stop(1, 101, 1, 10)
+    stop = _make_stop(1, 101, 1, 600)
     route_solution = _make_route_solution([stop])
     route_solution.set_start_time = "17:00"
 

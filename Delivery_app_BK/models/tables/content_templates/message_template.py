@@ -1,5 +1,8 @@
+import copy
+
 from sqlalchemy.orm import validates
 from sqlalchemy import Column, Integer, String,  Boolean
+from sqlalchemy import JSON
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.orm import relationship
@@ -30,7 +33,7 @@ class MessageTemplate(db.Model, TeamScopedMixin):
     client_id = Column(String, index=True)
     event = Column(String)
     enable = Column(Boolean)
-    template = Column(JSONB)
+    template = Column(JSONB().with_variant(JSON, "sqlite"))
     name = Column(String)
     ask_permission = Column(Boolean, default=False)
     channel = Column(String, nullable=False)
@@ -82,6 +85,24 @@ class MessageTemplate(db.Model, TeamScopedMixin):
             )
         self._validate_schedule_configuration(offset_unit=value)
         return value
+
+    @validates("template")
+    def validate_template(self, key, value):
+        if value is None:
+            return None
+        if isinstance(value, list):
+            return copy.deepcopy(value)
+        if not isinstance(value, dict):
+            raise ValidationFailed("Invalid template payload. Expected a JSON object or array.")
+
+        normalized = copy.deepcopy(value)
+        footer_buttons = normalized.get("footerButtons")
+        if footer_buttons is None:
+            legacy_footer_buttons = normalized.get("footer_buttons")
+            if legacy_footer_buttons is not None:
+                normalized["footerButtons"] = legacy_footer_buttons
+
+        return normalized
 
     def _validate_schedule_configuration(
         self,

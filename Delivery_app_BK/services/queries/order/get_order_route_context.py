@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.orm import selectinload
 
 from Delivery_app_BK.errors import NotFound, ValidationFailed
@@ -7,6 +9,8 @@ from ...context import ServiceContext
 from ..get_instance import get_instance
 from ..route_solutions.serialize_route_solution_stops import serialize_route_solution_stops
 from ..route_solutions.serialize_route_solutions import serialize_route_solution
+
+logger = logging.getLogger(__name__)
 
 
 def _unwrap_single_serialized_stop(serialized_stop):
@@ -60,10 +64,16 @@ def get_order_route_context(order_id: int, ctx: ServiceContext) -> dict:
     route_solution_ids = {
         stop.route_solution_id for stop in selected_stops if stop.route_solution_id is not None
     }
-    if len(route_solution_ids) != 1:
-        raise ValidationFailed(
-            f"Expected exactly one selected route solution for order with id: {order_id}."
+    if len(route_solution_ids) > 1:
+        logger.warning(
+            "Order %s has stops in multiple selected route solutions: %s. Using the most recent one.",
+            order_id,
+            route_solution_ids,
         )
+        most_recent_id = selected_stops[0].route_solution_id
+        selected_stops = [
+            stop for stop in selected_stops if stop.route_solution_id == most_recent_id
+        ]
 
     if len(selected_stops) != 1:
         raise ValidationFailed(

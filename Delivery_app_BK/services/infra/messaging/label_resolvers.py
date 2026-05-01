@@ -239,6 +239,19 @@ def _resolve_client_form_link(context: MessageRenderContext, channel: str) -> st
     return _to_string(context.extra_context.get("client_form_link"))
 
 
+def _resolve_driver_phone(context: MessageRenderContext, channel: str) -> str:
+    route_solution = context.get_selected_route_solution()
+    if route_solution is None:
+        return ""
+
+    driver = getattr(route_solution, "driver", None)
+
+    if driver is None:
+        return ""
+
+    return phone_to_string(getattr(driver, "phone_number", None))
+
+
 def _parse_reschedule_window(
     context: MessageRenderContext,
 ) -> tuple[datetime | None, datetime | None, datetime | None, datetime | None]:
@@ -402,6 +415,7 @@ LABEL_RESOLVER_REGISTRY: dict[str, LabelResolver] = {
     "tracking_number": _resolve_tracking_number,
     "tracking_link": _resolve_tracking_link,
     "client_form_link": _resolve_client_form_link,
+    "driver_phone": _resolve_driver_phone,
 
     "expected_arrival_time_costumer": _resolve_expected_arrival_time_costumer,
     "expected_arrival_time": _resolve_expected_arrival_time,
@@ -413,6 +427,10 @@ LABEL_RESOLVER_REGISTRY: dict[str, LabelResolver] = {
 }
 
 
+
+
+def has_label_resolver(label_key: str) -> bool:
+    return label_key in LABEL_RESOLVER_REGISTRY
 
 
 def resolve_label(label_key: str, context: MessageRenderContext, channel: str) -> str:

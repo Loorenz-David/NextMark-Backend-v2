@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import importlib
 from types import SimpleNamespace
 
 from Delivery_app_BK.route_optimization.constants.is_optimized import IS_OPTIMIZED_OPTIMIZE
-from Delivery_app_BK.services.commands.delivery_plan.local_delivery.route_solution.update_route_solution_from_plan import (
+from Delivery_app_BK.services.commands.route_plan.local_delivery.route_solution.update_route_solution_from_plan import (
     update_route_solution_from_plan,
+)
+
+update_route_solution_module = importlib.import_module(
+    "Delivery_app_BK.services.commands.route_plan.local_delivery.route_solution.update_route_solution_from_plan"
 )
 
 
@@ -26,6 +31,7 @@ def _build_route_solution(*, set_start_time: str | None, arrival: datetime):
         set_start_time=set_start_time,
         set_end_time=None,
         eta_tolerance_seconds=None,
+        eta_message_tolerance=1800,
         stops_service_time=None,
         expected_start_time=datetime(2026, 2, 28, 7, 0, 0, tzinfo=timezone.utc),
         expected_end_time=datetime(2026, 2, 28, 19, 0, 0, tzinfo=timezone.utc),
@@ -208,3 +214,50 @@ def test_set_start_updates_expected_times_and_rechecks_violations_when_moved_bac
     assert updated.stops[0].has_constraint_violation is True
     assert updated.stops[0].constraint_warnings
     assert updated.stops[0].constraint_warnings[0]["type"] == "time_window_violation"
+
+
+def test_first_save_sets_route_end_warning_after_refresh(monkeypatch):
+    plan_start = datetime(2026, 4, 30, 0, 0, 0, tzinfo=timezone.utc)
+    plan_end = datetime(2026, 4, 30, 23, 59, 59, tzinfo=timezone.utc)
+    route_solution = _build_route_solution(
+        set_start_time="12:00:00",
+        arrival=datetime(2026, 4, 30, 12, 0, 0, tzinfo=timezone.utc),
+    )
+    route_solution.id = None
+    route_solution.set_end_time = "14:30:00"
+    route_solution.expected_end_time = datetime(2026, 4, 30, 13, 30, 0, tzinfo=timezone.utc)
+    route_solution.stops[0].order_id = 1
+
+    def _fake_refresh(
+        route_solution,
+        recompute_mode,
+        recompute_from_position,
+        time_zone,
+    ):
+        route_solution.expected_end_time = datetime(2026, 4, 30, 15, 3, 15, tzinfo=timezone.utc)
+        return route_solution, list(route_solution.stops)
+
+    monkeypatch.setattr(
+        update_route_solution_module,
+        "refresh_local_delivery_route_execution_instance",
+        _fake_refresh,
+    )
+
+    updated, stops_changed, _ = update_route_solution_from_plan(
+        route_solution=route_solution,
+        updates={
+            "set_start_time": "13:53:00",
+            "set_end_time": "13:59:00",
+        },
+        plan_start=plan_start,
+        plan_end=plan_end,
+        previous_plan_start=plan_start,
+        previous_plan_end=plan_end,
+        create_variant_on_save=False,
+        time_zone="UTC",
+    )
+
+    assert stops_changed is True
+    assert updated.has_route_warnings is True
+    assert updated.route_warnings
+    assert updated.route_warnings[0]["type"] == "route_end_time_exceeded"

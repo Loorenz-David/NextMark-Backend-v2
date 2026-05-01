@@ -9,6 +9,10 @@ from Delivery_app_BK.services.domain.order.shopify_intent_sku import (
         INTENT_SKU_TO_PLAN_OBJECTIVE,
         resolve_intent_from_shopify_line_items,
 )
+from .line_item_enrichment import (
+        ShopifyMetafieldResolver,
+        enrich_mapped_item_from_shopify_line_item,
+)
 from ..mappers import item_mapper, order_mapper
 
 def create_internal_order(
@@ -26,7 +30,16 @@ def create_internal_order(
         customer_payload = payload.get("customer") if isinstance(payload, dict) else None
 
         line_items = payload.get("line_items") or []
-        items = [ item_mapper(item) for item in line_items]
+        metafield_resolver = ShopifyMetafieldResolver(shopify_shop)
+        items = [
+                enrich_mapped_item_from_shopify_line_item(
+                        mapped_item=item_mapper(line_item),
+                        line_item=line_item,
+                        integration=shopify_shop,
+                        resolver=metafield_resolver,
+                )
+                for line_item in line_items
+        ]
         plan_objective, should_suppress = resolve_intent_from_shopify_line_items(line_items)
 
         if should_suppress:

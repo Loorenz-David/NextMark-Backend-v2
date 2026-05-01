@@ -158,8 +158,9 @@ def find_orders (
         query = query.filter(Order.delivery_plan_id.is_(None))
             
 
-    if "earliest_delivery_date" in params:
-        earliest_delivery_date = to_datetime( params.get( "earliest_delivery_date" ) )
+    earliest_delivery_date_raw = params.get("earliest_delivery_date")
+    if earliest_delivery_date_raw is not None:
+        earliest_delivery_date = to_datetime(earliest_delivery_date_raw)
         window_subquery = (
             db.session.query(OrderDeliveryWindow.id)
             .filter(
@@ -170,8 +171,9 @@ def find_orders (
         )
         query = query.filter(window_subquery)
 
-    if "latest_delivery_date" in params:
-        latest_delivery_date = to_datetime ( params.get( "latest_delivery_date" ) )
+    latest_delivery_date_raw = params.get("latest_delivery_date")
+    if latest_delivery_date_raw is not None:
+        latest_delivery_date = to_datetime(latest_delivery_date_raw)
         window_subquery = (
             db.session.query(OrderDeliveryWindow.id)
             .filter(
@@ -181,6 +183,21 @@ def find_orders (
             .exists()
         )
         query = query.filter(window_subquery)
+
+    order_schedule_from_raw = params.get("order_schedule_from")
+    order_schedule_to_raw = params.get("order_schedule_to")
+    if order_schedule_from_raw is not None or order_schedule_to_raw is not None:
+        if Order.route_plan not in joined_relations:
+            query = query.join(Order.route_plan)
+            joined_relations.add(Order.route_plan)
+
+        if order_schedule_from_raw is not None:
+            order_schedule_from = to_datetime(order_schedule_from_raw)
+            query = query.filter(DeliveryPlan.start_date >= order_schedule_from)
+
+        if order_schedule_to_raw is not None:
+            order_schedule_to = to_datetime(order_schedule_to_raw)
+            query = query.filter(DeliveryPlan.start_date <= order_schedule_to)
 
     if "creation_date_from" in params:
         creation_date_from = to_datetime( params.get("creation_date_from" ) )

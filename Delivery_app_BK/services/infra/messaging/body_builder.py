@@ -38,6 +38,15 @@ def _render_node(node: Any, context: MessageRenderContext, channel: str) -> str:
             return ""
         return resolve_label(label_key, context, channel)
 
+    if node_type == "paragraph":
+        children = node.get("children")
+        if not isinstance(children, list):
+            return ""
+        rendered_children = "".join(_render_node(child, context, channel) for child in children)
+        if channel == "email" and not rendered_children:
+            return "&nbsp;"
+        return rendered_children
+
     text_value = node.get("text")
     if isinstance(text_value, str):
         return text_value
@@ -54,5 +63,8 @@ def build_message_body(template_value: Any, context: MessageRenderContext, chann
         return ""
 
     rendered_blocks = [_render_node(block, context, channel) for block in template_value]
+
+    if channel == "email":
+        return "<br><br>".join(rendered_blocks).strip()
 
     return "\n".join(rendered_blocks).strip("\n")

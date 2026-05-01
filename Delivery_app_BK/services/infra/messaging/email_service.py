@@ -13,6 +13,7 @@ from Delivery_app_BK.models import EmailSMTP, MessageTemplate, db
 from Delivery_app_BK.services.infra.messaging.body_builder import build_message_body
 from Delivery_app_BK.services.infra.messaging.label_resolvers import (
     MessageRenderContext,
+    has_label_resolver,
     resolve_label,
 )
 from Delivery_app_BK.services.utils.crypto import decrypt_secret
@@ -113,28 +114,64 @@ def _resolve_url_template(url_template: Any, render_context: MessageRenderContex
         label_key = match.group(1)
         return resolve_label(label_key, render_context, channel="email")
 
+    # Support links provided directly as label keys (e.g. "tracking_link").
+    if has_label_resolver(raw_url):
+        return resolve_label(raw_url, render_context, channel="email").strip()
+
     return LABEL_PATTERN.sub(_replace, raw_url).strip()
 
 
+def _coerce_buttons(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        return [value]
+    return []
+
+
+def _resolve_button_label(button: dict[str, Any], render_context: MessageRenderContext) -> str:
+    label_value = button.get("label")
+    if label_value is None:
+        label_value = button.get("text")
+    if label_value is None:
+        label_value = button.get("title")
+
+    if isinstance(label_value, str):
+        return label_value.strip()
+
+    if isinstance(label_value, (list, dict)):
+        rendered = build_message_body(_coerce_buttons(label_value), render_context, channel="email")
+        return rendered.strip()
+
+    return ""
+
+
+def _resolve_button_url(button: dict[str, Any], render_context: MessageRenderContext) -> str:
+    for key in ("urlTemplate", "url_template", "url", "link", "href"):
+        if key in button:
+            return _resolve_url_template(button.get(key), render_context)
+    return ""
+
+
 def _render_footer_buttons(buttons: Any, render_context: MessageRenderContext) -> str:
-    if not isinstance(buttons, list):
+    normalized_buttons = _coerce_buttons(buttons)
+    if not normalized_buttons:
         return ""
 
     button_html_blocks: list[str] = []
-    for button in buttons:
+    for button in normalized_buttons:
         if not isinstance(button, dict):
             continue
 
-        label = button.get("label")
-        url_template = button.get("urlTemplate")
-        if not isinstance(label, str):
+        label = _resolve_button_label(button, render_context)
+        if not label:
             continue
 
-        resolved_url = _resolve_url_template(url_template, render_context)
+        resolved_url = _resolve_button_url(button, render_context)
         if not resolved_url:
             continue
 
-        safe_label = html.escape(label.strip())
+        safe_label = html.escape(label)
         safe_url = html.escape(resolved_url, quote=True)
         if not safe_label:
             continue
@@ -162,6 +199,10 @@ def _extract_email_template_sections(template_value: Any) -> tuple[Any, Any, Any
         header = template_value.get("header")
         body = template_value.get("body")
         buttons = template_value.get("footerButtons")
+        if buttons is None:
+            buttons = template_value.get("footer_buttons")
+        if buttons is None:
+            buttons = template_value.get("buttons")
         return header, body, buttons
 
     return [], template_value, []

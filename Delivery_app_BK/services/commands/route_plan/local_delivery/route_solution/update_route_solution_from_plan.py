@@ -149,6 +149,9 @@ def update_route_solution_from_plan(
             getattr(route_solution, "id", None),
             FULL_RECOMPUTE,
         )
+        # Refresh can move expected_end_time past the allowed route window.
+        # Re-sync route-level warning state with the final recomputed schedule.
+        sync_route_end_warning(route_solution, allowed_end)
 
     return route_solution, stops_changed, original_route_solution
 

@@ -52,6 +52,7 @@ def serialize_created_order(instance: Order) -> dict:
         "marketing_messages": instance.marketing_messages,
         "creation_date": creation_date.isoformat() if creation_date else None,
         "items_updated_at": instance.items_updated_at.isoformat() if instance.items_updated_at else None,
+        "item_type_counts": instance.item_type_counts,
         "order_state_id": instance.order_state_id,
         "route_plan_id": route_plan_id,
         "route_group_id": route_group_id,
