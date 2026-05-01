@@ -46,9 +46,10 @@ def delete_order(ctx: ServiceContext):
 
     delete_deltas = [
         OrderDeleteDelta(
+            order_instance=order,
             order_id=order.id,
             order_client_id=order.client_id,
-                delivery_plan=order.route_plan,
+            delivery_plan=order.route_plan,
         )
         for order in ordered_orders
     ]

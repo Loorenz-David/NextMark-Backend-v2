@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 @dataclass(frozen=True)
 class OrderDeleteDelta:
+    order_instance: Any
     order_id: int
     order_client_id: str
     delivery_plan: Any | None = None
