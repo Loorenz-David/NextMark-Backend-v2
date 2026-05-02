@@ -27,8 +27,9 @@ class OrderEventPrintDocuments(str,Enum):
 """
 Delivery plan changed happes when a order changes of delivery plan type, 
 
-Order_rescheduled happens when a delivery plan changes it's dates. or when an order changes
-of plan and dates are not the same as the previous plan dates 
+Order_rescheduled happens when a delivery plan changes it's dates, when an order moves
+from no plan into a delivery plan, or when an order changes plan and dates are not the
+same as the previous plan dates.
 
 DELIVERY_WINDOW_RESCHEDULED_BY_USER happens when a user changes the window of an order manually,
 this windows are bounderies not clear dates 

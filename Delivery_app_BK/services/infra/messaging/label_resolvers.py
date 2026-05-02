@@ -266,6 +266,7 @@ def _parse_reschedule_window(
     - eta_changed             → arrivals only, no window end
     - plan_window_changed     → arrivals if present, otherwise plan window
     - plan_move_date_changed  → arrivals if present, otherwise plan window
+    - plan_assigned           → arrivals if present, otherwise plan window
     """
     order_event = context.order_event
     if order_event is None:

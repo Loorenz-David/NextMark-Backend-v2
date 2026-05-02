@@ -214,13 +214,16 @@ def apply_orders_route_plan_change(
         extra_instances.extend(change_result.instances)
         post_flush_actions.extend(change_result.post_flush_actions)
 
-        if old_plan is not None and (
-            (getattr(old_plan, "start_date", None), getattr(old_plan, "end_date", None))
-            != (getattr(new_plan, "start_date", None), getattr(new_plan, "end_date", None))
-        ):
+        reschedule_reason = _route_plan_move_reschedule_reason(
+            old_plan_id=old_plan_id,
+            old_plan=old_plan,
+            new_plan=new_plan,
+        )
+        if reschedule_reason is not None:
             reschedule_candidates.append({
                 "order": order_instance,
                 "old_plan": old_plan,
+                "reason": reschedule_reason,
             })
 
         pending_events.append(
@@ -250,13 +253,13 @@ def apply_orders_route_plan_change(
             pending_events.append(
                 build_delivery_rescheduled_event(
                     order_instance,
-                    old_plan_start=getattr(old_plan, "start_date", None),
-                    old_plan_end=getattr(old_plan, "end_date", None),
+                    old_plan_start=getattr(old_plan, "start_date", None) if old_plan else None,
+                    old_plan_end=getattr(old_plan, "end_date", None) if old_plan else None,
                     new_plan_start=getattr(new_plan, "start_date", None),
                     new_plan_end=getattr(new_plan, "end_date", None),
                     old_expected_arrival=old_eta_by_order_id.get(order_instance.id),
                     new_expected_arrival=new_eta_by_order_id.get(order_instance.id),
-                    reason="plan_move_date_changed",
+                    reason=candidate["reason"],
                 )
             )
 
@@ -341,6 +344,26 @@ def apply_orders_route_plan_change(
         "updated": updated_bundles,
         "pending_events": pending_events,
     }
+
+
+def _route_plan_move_reschedule_reason(
+    *,
+    old_plan_id: int | None,
+    old_plan,
+    new_plan,
+) -> str | None:
+    if new_plan is None:
+        return None
+    if old_plan_id is None:
+        return "plan_assigned"
+    if old_plan is None:
+        return None
+    if (
+        (getattr(old_plan, "start_date", None), getattr(old_plan, "end_date", None))
+        != (getattr(new_plan, "start_date", None), getattr(new_plan, "end_date", None))
+    ):
+        return "plan_move_date_changed"
+    return None
 
 
 def _prepare_old_local_delivery_batch_changes(

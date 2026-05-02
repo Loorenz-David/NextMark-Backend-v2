@@ -159,13 +159,22 @@ def build_route_plan_changed_event(
     old_plan_id: int | None,
     new_plan,
 ) -> dict:
+    new_plan_id = new_plan.id if new_plan else None
+    new_date_strategy = getattr(new_plan, "date_strategy", None) if new_plan else None
     return {
         "order_id": order_instance.id,
         "team_id": order_instance.team_id,
         "event_name": OrderEvent.DELIVERY_PLAN_CHANGED.value,
         "payload": {
             "old_delivery_plan_id": old_plan_id,
-            "new_delivery_plan_id": new_plan.id if new_plan else None,
+            "new_delivery_plan_id": new_plan_id,
+            "old_route_plan_id": old_plan_id,
+            "new_route_plan_id": new_plan_id,
+            "new_plan_type": normalize_order_plan_objective(
+                getattr(order_instance, "order_plan_objective", None)
+            )
+            or new_date_strategy,
+            "new_date_strategy": new_date_strategy,
         },
     }
 
