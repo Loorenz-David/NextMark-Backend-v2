@@ -225,6 +225,7 @@ def _build_route_solution_instance(
         stops_service_time=normalized_defaults["stops_service_time"],
         route_end_strategy=normalized_defaults["route_end_strategy"],
         driver_id=normalized_defaults["driver_id"],
+        vehicle_id=normalized_defaults["vehicle_id"],
         start_facility_id=normalized_defaults["start_facility_id"],
     )
 
@@ -277,4 +278,7 @@ def _serialize_route_solution_light(route_solution: RouteSolution | None) -> dic
         "eta_tolerance_seconds": route_solution.eta_tolerance_seconds,
         "eta_message_tolerance": route_solution.eta_message_tolerance if route_solution.eta_message_tolerance is not None else 1800,
         "stops_service_time": route_solution.stops_service_time,
+        "driver_id": route_solution.driver_id,
+        "vehicle_id": route_solution.vehicle_id,
+        "route_end_strategy": route_solution.route_end_strategy,
     }

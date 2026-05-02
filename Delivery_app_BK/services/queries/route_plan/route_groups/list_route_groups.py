@@ -26,6 +26,28 @@ def _serialize_selected_route_solution(route_group):
         "is_optimized": selected.is_optimized,
         "total_distance_meters": selected.total_distance_meters,
         "total_travel_time_seconds": selected.total_travel_time_seconds,
+        "expected_start_time": (
+            selected.expected_start_time.isoformat()
+            if selected.expected_start_time
+            else None
+        ),
+        "expected_end_time": (
+            selected.expected_end_time.isoformat()
+            if selected.expected_end_time
+            else None
+        ),
+        "set_start_time": selected.set_start_time,
+        "set_end_time": selected.set_end_time,
+        "eta_tolerance_seconds": selected.eta_tolerance_seconds,
+        "eta_message_tolerance": (
+            selected.eta_message_tolerance
+            if selected.eta_message_tolerance is not None
+            else 1800
+        ),
+        "stops_service_time": selected.stops_service_time,
+        "driver_id": selected.driver_id,
+        "vehicle_id": selected.vehicle_id,
+        "route_end_strategy": selected.route_end_strategy,
         "stop_count": len(selected.stops or []),
         "order_count": route_group.total_orders or 0,
     }

@@ -30,7 +30,12 @@ def test_create_manual_no_zone_route_group_uses_route_solution_defaults(monkeypa
         zone_id=None,
         route_group_defaults={
             "name": "Overflow",
-            "route_solution": {"set_start_time": "08:15"},
+            "route_solution": {
+                "set_start_time": "08:15",
+                "set_end_time": "18:45",
+                "driver_id": 3,
+                "vehicle_id": 7,
+            },
         },
     )
 
@@ -40,6 +45,8 @@ def test_create_manual_no_zone_route_group_uses_route_solution_defaults(monkeypa
     monkeypatch.setattr(module.db.session, "flush", lambda: None)
     monkeypatch.setattr(module.db.session, "commit", lambda: None)
     monkeypatch.setattr(module, "recompute_route_group_totals", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "maybe_sync_plan_state_from_groups", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "serialize_created_route_plan", lambda plan: {"id": plan.id})
     monkeypatch.setattr(module, "serialize_route_group", lambda rg, _ctx: {"zone_snapshot": rg.zone_geometry_snapshot})
 
     result = module.create_route_group_in_plan(
@@ -49,6 +56,9 @@ def test_create_manual_no_zone_route_group_uses_route_solution_defaults(monkeypa
     assert result["created"] is True
     assert result["route_group"]["zone_snapshot"]["name"] == "Overflow"
     assert result["route_solution"]["set_start_time"] == "08:15"
+    assert result["route_solution"]["set_end_time"] == "18:45"
+    assert result["route_solution"]["driver_id"] == 3
+    assert result["route_solution"]["vehicle_id"] == 7
 
 
 def test_create_zone_route_group_returns_existing_idempotently(monkeypatch):
@@ -69,7 +79,11 @@ def test_create_zone_route_group_returns_existing_idempotently(monkeypatch):
         set_start_time="09:00",
         set_end_time=None,
         eta_tolerance_seconds=0,
+        eta_message_tolerance=1800,
         stops_service_time=None,
+        driver_id=None,
+        vehicle_id=None,
+        route_end_strategy="round_trip",
     )
     existing_group = SimpleNamespace(
         id=77,
@@ -90,6 +104,7 @@ def test_create_zone_route_group_returns_existing_idempotently(monkeypatch):
     monkeypatch.setattr(module, "parse_create_route_group_request", lambda *_args, **_kwargs: request)
     monkeypatch.setattr(module.db.session, "get", _fake_get)
     monkeypatch.setattr(module, "RouteGroup", SimpleNamespace(query=_QueryFirst(existing_group)))
+    monkeypatch.setattr(module, "serialize_created_route_plan", lambda plan: {"id": plan.id})
     monkeypatch.setattr(module, "serialize_route_group", lambda rg, _ctx: {"id": rg.id, "zone_id": rg.zone_id})
 
     result = module.create_route_group_in_plan(_ctx({"route_plan_id": 42, "zone_id": 7}))

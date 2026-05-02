@@ -80,6 +80,7 @@ def serialize_created_route_solution(instance: RouteSolution) -> dict:
         "is_selected": instance.is_selected,
         "is_optimized": instance.is_optimized,
         "driver_id": instance.driver_id,
+        "vehicle_id": instance.vehicle_id,
         "route_end_strategy": instance.route_end_strategy,
         "route_group_id": instance.route_group_id,
         "created_at": _to_iso(instance.created_at),

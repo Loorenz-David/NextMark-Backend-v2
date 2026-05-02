@@ -264,3 +264,36 @@ def test_build_no_zone_group_applies_route_group_defaults(monkeypatch):
         "geometry": None,
     }
     assert captured_route_solution_defaults["route_solution"]["set_start_time"] == "08:30"
+
+
+def test_build_route_solution_instance_applies_set_time_defaults(monkeypatch):
+    monkeypatch.setattr(module, "generate_client_id", lambda prefix: f"{prefix}_123")
+
+    route_group = SimpleNamespace(route_solutions=[])
+    route_solution = module._build_route_solution_instance(
+        ctx=SimpleNamespace(
+            team_id=1,
+            identity={"time_zone": "Europe/Stockholm"},
+        ),
+        route_plan_instance=SimpleNamespace(
+            id=123,
+            team_id=1,
+            start_date=datetime(2026, 5, 2, 0, 0, 0, tzinfo=timezone.utc),
+        ),
+        route_group=route_group,
+        template_route_solution_defaults={},
+        route_group_defaults={
+            "route_solution": {
+                "set_start_time": "09:55",
+                "set_end_time": "22:59",
+                "driver_id": 3,
+                "vehicle_id": 7,
+            }
+        },
+    )
+
+    assert route_solution.set_start_time == "09:55"
+    assert route_solution.set_end_time == "22:59"
+    assert route_solution.driver_id == 3
+    assert route_solution.vehicle_id == 7
+    assert route_group.route_solutions == [route_solution]

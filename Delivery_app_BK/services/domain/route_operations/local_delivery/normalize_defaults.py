@@ -53,6 +53,10 @@ def normalize_local_delivery_route_solution_defaults(
     if not isinstance(driver_id, int) or isinstance(driver_id, bool):
         driver_id = None
 
+    vehicle_id = route_solution_defaults.get("vehicle_id")
+    if not isinstance(vehicle_id, int) or isinstance(vehicle_id, bool):
+        vehicle_id = None
+
     start_facility_id = route_solution_defaults.get("start_facility_id")
     if not isinstance(start_facility_id, int) or isinstance(start_facility_id, bool):
         start_facility_id = None
@@ -73,6 +77,7 @@ def normalize_local_delivery_route_solution_defaults(
         "set_end_time": set_end_time,
         "route_end_strategy": route_end_strategy,
         "driver_id": driver_id,
+        "vehicle_id": vehicle_id,
         "start_facility_id": start_facility_id,
         "eta_tolerance_seconds": max(0, min(7200, eta_tolerance_seconds)),
         "eta_message_tolerance": max(0, min(7200, eta_message_tolerance)),
