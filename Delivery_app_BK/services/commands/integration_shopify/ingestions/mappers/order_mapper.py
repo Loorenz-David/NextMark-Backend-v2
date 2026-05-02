@@ -101,7 +101,6 @@ def order_mapper(shopify_order):
         "reference_number": '#' + str(shopify_order.get("order_number")),
         "external_order_id": str(shopify_order.get("id")),
         "external_source": "shopify",
-        "creation_date":shopify_order.get("created_at"),
         "client_email":shopify_order.get("contact_email", shopify_order.get("email")),
         "client_primary_phone":_build_phone_object(shopify_order.get("phone")),
     }

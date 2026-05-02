@@ -1,3 +1,5 @@
+import logging
+
 from Delivery_app_BK.errors import NotFound
 from Delivery_app_BK.models import Costumer, ShopifyWebhookEvents, db
 from Delivery_app_BK.services.queries.integration_shopify import get_integration_by_shop
@@ -15,21 +17,35 @@ from .line_item_enrichment import (
 )
 from ..mappers import item_mapper, order_mapper
 
+
+logger = logging.getLogger(__name__)
+
 def create_internal_order(
         shop:str,
         payload: dict,
 ):
-        
+        external_order_id = payload.get("id") if isinstance(payload, dict) else None
+        line_items = payload.get("line_items") or [] if isinstance(payload, dict) else []
+        logger.info(
+                "Shopify inbound create_internal_order start | shop=%s external_order_id=%s line_items=%s",
+                shop,
+                external_order_id,
+                len(line_items),
+        )
 
         shopify_shop = get_integration_by_shop(shop)
 
         if not shopify_shop:
+                logger.error(
+                        "Shopify inbound missing integration | shop=%s external_order_id=%s",
+                        shop,
+                        external_order_id,
+                )
                 raise NotFound(f"Shop integration not found with name: {shop}")
        
         order =  order_mapper(payload)
         customer_payload = payload.get("customer") if isinstance(payload, dict) else None
 
-        line_items = payload.get("line_items") or []
         metafield_resolver = ShopifyMetafieldResolver(shopify_shop)
         items = [
                 enrich_mapped_item_from_shopify_line_item(
@@ -41,15 +57,37 @@ def create_internal_order(
                 for line_item in line_items
         ]
         plan_objective, should_suppress = resolve_intent_from_shopify_line_items(line_items)
+        logger.info(
+                "Shopify inbound intent resolved | shop=%s external_order_id=%s plan_objective=%s suppress=%s mapped_items=%s",
+                shop,
+                external_order_id,
+                plan_objective,
+                should_suppress,
+                len(items),
+        )
 
         if should_suppress:
+                logger.warning(
+                        "Shopify inbound order suppressed by SKU intent rules | shop=%s external_order_id=%s",
+                        shop,
+                        external_order_id,
+                )
                 return
 
         reserved_skus = set(INTENT_SKU_TO_PLAN_OBJECTIVE) | set(FLAG_SKUS_TO_EXCLUDE)
+        before_filter_count = len(items)
         items = [
                 item for item in items
                 if str(item.get("article_number")).strip().upper() not in reserved_skus
         ]
+        logger.info(
+                "Shopify inbound item filtering complete | shop=%s external_order_id=%s before=%s after=%s removed_reserved=%s",
+                shop,
+                external_order_id,
+                before_filter_count,
+                len(items),
+                before_filter_count - len(items),
+        )
 
         order['items'] = items
         order["order_plan_objective"] = plan_objective
@@ -63,13 +101,32 @@ def create_internal_order(
                 )
                 if costumer_id is not None:
                         order["costumer"] = {"costumer_id": costumer_id}
+                        logger.info(
+                                "Shopify inbound customer resolved | shop=%s external_order_id=%s costumer_id=%s",
+                                shop,
+                                external_order_id,
+                                costumer_id,
+                        )
+                else:
+                        logger.warning(
+                                "Shopify inbound customer resolution returned no id | shop=%s external_order_id=%s",
+                                shop,
+                                external_order_id,
+                        )
 
         ctx = ServiceContext(
                 incoming_data= { "fields": order },
                 identity=identity,
         )
 
-        create_order( ctx )
+        result = create_order( ctx )
+        created_count = len((result or {}).get("created") or [])
+        logger.info(
+                "Shopify inbound create_order completed | shop=%s external_order_id=%s created_count=%s",
+                shop,
+                external_order_id,
+                created_count,
+        )
 
 
 def _resolve_or_create_shopify_costumer_id(
