@@ -73,8 +73,6 @@ class RoutePlan(db.Model, TeamScopedMixin):
                 f"Invalid date_strategy '{value}'. "
                 f"Allowed values: {self.DATE_STRATEGIES}"
             )
-        if value == "single" and self.start_date is not None:
-            self.end_date = self._normalize_end_of_day(self.start_date)
         return value
 
     @validates("start_date")

@@ -68,9 +68,11 @@ class GoogleDirectionsResponseMapper:
             )
 
         route = routes[0]
-        duration_seconds = _duration_to_seconds(getattr(route, "duration", None))
         distance_meters = int(getattr(route, "distance_meters", 0) or 0)
         legs = getattr(route, "legs", None) or []
+        duration_seconds = _total_leg_duration_seconds(legs)
+        if duration_seconds <= 0:
+            duration_seconds = _duration_to_seconds(getattr(route, "duration", None))
         leg_polylines: List[Optional[str]] = []
         stop_results: List[DirectionsStopResult] = []
         departure_time = request.departure_time
@@ -189,3 +191,7 @@ def _duration_to_seconds(value: Any) -> int:
         return int(float(parsed))
     except (TypeError, ValueError):
         return 0
+
+
+def _total_leg_duration_seconds(legs: List[Any]) -> int:
+    return sum(_duration_to_seconds(getattr(leg, "duration", None)) for leg in legs)

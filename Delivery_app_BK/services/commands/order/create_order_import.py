@@ -47,7 +47,7 @@ def _order_import_mapper(row):
     map_order = {
         "client_id": generate_client_id('order_import_'),
         "external_order_id": _clean_value(row.get("external_order_id")),
-        "external_source":_clean_value(row.get("external_source")) or 'csv_import',
+        "external_source":_clean_value(row.get("external_source")) or 'csv import',
         "reference_number": _clean_value(row.get("order_reference_number")),
         "external_tracking_number": _clean_value(row.get("tracking_number")),
         "external_tracking_link": _clean_value(row.get("tracking_link")),
