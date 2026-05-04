@@ -44,6 +44,7 @@ def clone_route_solution(
         is_selected=True,
         is_optimized=IS_OPTIMIZED_PARTIAL,
         driver_id=route_solution.driver_id,
+        vehicle_id=route_solution.vehicle_id,
         route_group_id=route_solution.route_group_id,
         team_id=route_solution.team_id,
         start_leg_polyline=route_solution.start_leg_polyline,
