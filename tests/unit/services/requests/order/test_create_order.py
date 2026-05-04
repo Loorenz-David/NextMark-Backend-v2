@@ -158,6 +158,41 @@ def test_parse_create_order_accepts_item_position_as_string_label():
     assert parsed.items[0].fields["item_position"] == "front_left"
 
 
+def test_parse_create_order_accepts_nested_item_images():
+    parsed = parse_create_order_request(
+        {
+            "items": [
+                {
+                    "article_number": "SKU-1",
+                    "item_images": [
+                        "https://cdn.example.com/items/sku-1-front.jpg",
+                        "https://cdn.example.com/items/sku-1-side.jpg",
+                    ],
+                }
+            ]
+        }
+    )
+
+    assert parsed.items[0].fields["item_images"] == [
+        "https://cdn.example.com/items/sku-1-front.jpg",
+        "https://cdn.example.com/items/sku-1-side.jpg",
+    ]
+
+
+def test_parse_create_order_rejects_non_string_nested_item_images():
+    with pytest.raises(ValidationFailed):
+        parse_create_order_request(
+            {
+                "items": [
+                    {
+                        "article_number": "SKU-1",
+                        "item_images": ["https://cdn.example.com/items/sku-1.jpg", 3],
+                    }
+                ]
+            }
+        )
+
+
 def test_parse_create_order_delivery_windows_null_means_explicit_clear():
     parsed = parse_create_order_request({"delivery_windows": None})
     assert parsed.delivery_windows == []

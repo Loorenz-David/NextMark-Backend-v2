@@ -1,9 +1,23 @@
 import importlib
 from types import SimpleNamespace
 
+import pytest
+
 module = importlib.import_module(
     "Delivery_app_BK.services.commands.integration_shopify.ingestions.inbound.create_internal_order"
 )
+
+
+@pytest.fixture(autouse=True)
+def _disable_shopify_image_lookup(monkeypatch):
+    monkeypatch.setattr(
+        module,
+        "ShopifyLineItemMediaResolver",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            get_line_item_images=lambda _line_item: [],
+            get_line_item_page_link=lambda _line_item: None,
+        ),
+    )
 
 
 def test_create_internal_order_creates_costumer_before_order_when_customer_present(monkeypatch):
@@ -90,6 +104,58 @@ def test_create_internal_order_sets_plan_objective_and_filters_reserved_skus(mon
 
     assert fields["order_plan_objective"] == "store_pickup"
     assert fields["items"] == [{"article_number": "SKU-1"}]
+
+
+def test_create_internal_order_applies_shopify_item_images_after_filtering(monkeypatch):
+    captured_create_order_ctx = {}
+    captured_image_line_items = {}
+
+    monkeypatch.setattr(
+        module,
+        "get_integration_by_shop",
+        lambda _shop: SimpleNamespace(team_id=9, shop="demo.myshopify.com", access_token="token"),
+    )
+    monkeypatch.setattr(module, "order_mapper", lambda payload: {"client_id": "order_1"})
+    monkeypatch.setattr(module, "item_mapper", lambda item: {"article_number": item.get("sku")})
+    monkeypatch.setattr(
+        module,
+        "create_order",
+        lambda ctx: captured_create_order_ctx.setdefault("incoming_data", ctx.incoming_data),
+    )
+
+    def _image_resolver(_integration, line_items):
+        captured_image_line_items["skus"] = [line_item.get("sku") for line_item in line_items]
+        return SimpleNamespace(
+            get_line_item_images=lambda line_item: [
+                f"https://cdn.example.com/{line_item['sku']}.jpg"
+            ],
+            get_line_item_page_link=lambda line_item: (
+                f"https://demo-shop.com/products/{line_item['sku'].lower()}"
+            ),
+        )
+
+    monkeypatch.setattr(module, "ShopifyLineItemMediaResolver", _image_resolver)
+
+    module.create_internal_order(
+        shop="demo.myshopify.com",
+        payload={
+            "line_items": [
+                {"sku": "INTENT_STORE_PICKUP", "product_id": 1},
+                {"sku": "SKU-1", "product_id": 2, "variant_id": 3},
+            ],
+        },
+    )
+
+    fields = captured_create_order_ctx["incoming_data"]["fields"]
+
+    assert captured_image_line_items["skus"] == ["SKU-1"]
+    assert fields["items"] == [
+        {
+            "article_number": "SKU-1",
+            "item_images": ["https://cdn.example.com/SKU-1.jpg"],
+            "page_link": "https://demo-shop.com/products/sku-1",
+        }
+    ]
 
 
 def test_create_internal_order_suppresses_customer_took_it_orders(monkeypatch):

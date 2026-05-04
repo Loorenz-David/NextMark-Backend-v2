@@ -13,6 +13,8 @@ from Delivery_app_BK.services.domain.order.shopify_intent_sku import (
 )
 from .line_item_enrichment import (
         ShopifyMetafieldResolver,
+        ShopifyLineItemMediaResolver,
+        apply_shopify_line_item_media,
         enrich_mapped_item_from_shopify_line_item,
 )
 from ..mappers import item_mapper, order_mapper
@@ -47,15 +49,19 @@ def create_internal_order(
         customer_payload = payload.get("customer") if isinstance(payload, dict) else None
 
         metafield_resolver = ShopifyMetafieldResolver(shopify_shop)
-        items = [
-                enrich_mapped_item_from_shopify_line_item(
+        item_pairs = [
+                (
+                        line_item,
+                        enrich_mapped_item_from_shopify_line_item(
                         mapped_item=item_mapper(line_item),
                         line_item=line_item,
                         integration=shopify_shop,
                         resolver=metafield_resolver,
+                        ),
                 )
                 for line_item in line_items
         ]
+        items = [item for _line_item, item in item_pairs]
         plan_objective, should_suppress = resolve_intent_from_shopify_line_items(line_items)
         logger.info(
                 "Shopify inbound intent resolved | shop=%s external_order_id=%s plan_objective=%s suppress=%s mapped_items=%s",
@@ -76,10 +82,12 @@ def create_internal_order(
 
         reserved_skus = set(INTENT_SKU_TO_PLAN_OBJECTIVE) | set(FLAG_SKUS_TO_EXCLUDE)
         before_filter_count = len(items)
-        items = [
-                item for item in items
+        item_pairs = [
+                (line_item, item)
+                for line_item, item in item_pairs
                 if str(item.get("article_number")).strip().upper() not in reserved_skus
         ]
+        items = [item for _line_item, item in item_pairs]
         logger.info(
                 "Shopify inbound item filtering complete | shop=%s external_order_id=%s before=%s after=%s removed_reserved=%s",
                 shop,
@@ -88,6 +96,19 @@ def create_internal_order(
                 len(items),
                 before_filter_count - len(items),
         )
+
+        media_resolver = ShopifyLineItemMediaResolver(
+                shopify_shop,
+                [line_item for line_item, _item in item_pairs],
+        )
+        items = [
+                apply_shopify_line_item_media(
+                        mapped_item=item,
+                        line_item=line_item,
+                        resolver=media_resolver,
+                )
+                for line_item, item in item_pairs
+        ]
 
         order['items'] = items
         order["order_plan_objective"] = plan_objective

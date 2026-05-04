@@ -65,6 +65,7 @@ ITEM_ALLOWED_FIELDS = {
     "item_position",
     "item_state_id",
     "page_link",
+    "item_images",
     "dimension_depth",
     "dimension_height",
     "dimension_width",
@@ -338,7 +339,26 @@ def _parse_item(item_raw, index: int) -> ItemCreateRequest:
             field=f"items[{index}].properties",
         )
 
+    if "item_images" in item_raw:
+        item_fields["item_images"] = _parse_item_images(
+            item_raw.get("item_images"),
+            field=f"items[{index}].item_images",
+        )
+
     return ItemCreateRequest(fields=item_fields)
+
+
+def _parse_item_images(value, *, field: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValidationFailed(f"{field} must be a list of strings.")
+    parsed: list[str] = []
+    for index, image_url in enumerate(value):
+        if not isinstance(image_url, str):
+            raise ValidationFailed(f"{field}[{index}] must be a string.")
+        parsed.append(image_url)
+    return parsed
 
 
 def _parse_order_state_id(value) -> int:
