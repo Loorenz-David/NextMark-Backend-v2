@@ -33,6 +33,7 @@ class MessageTemplate(db.Model, TeamScopedMixin):
     client_id = Column(String, index=True)
     event = Column(String)
     enable = Column(Boolean)
+    subject = Column(JSONB().with_variant(JSON, "sqlite"), nullable=True)
     template = Column(JSONB().with_variant(JSON, "sqlite"))
     name = Column(String)
     ask_permission = Column(Boolean, default=False)
@@ -103,6 +104,14 @@ class MessageTemplate(db.Model, TeamScopedMixin):
                 normalized["footerButtons"] = legacy_footer_buttons
 
         return normalized
+
+    @validates("subject")
+    def validate_subject(self, key, value):
+        if value is None:
+            return None
+        if isinstance(value, (str, list, dict)):
+            return copy.deepcopy(value)
+        raise ValidationFailed("Invalid subject payload. Expected a string, JSON object, or array.")
 
     def _validate_schedule_configuration(
         self,

@@ -20,13 +20,14 @@ def seed_user_roles(ctx: ServiceContext, base_roles: Dict[str, BaseRole]) -> Lis
     user_roles: List[UserRole] = []
 
     for payload in USER_ROLE_SEEDS:
-        base_role_key = payload.get("base_role_key")
+        base_role_key = str(payload.get("base_role_key", "")).strip().lower()
         base_role = base_roles.get(base_role_key)
         if not base_role:
             raise ValidationFailed(f"Missing base role for key '{base_role_key}'.")
 
         fields = ensure_client_id(dict(payload))
         fields.pop("base_role_key", None)
+        fields["role_name"] = str(fields.get("role_name", "")).strip().lower()
         fields["base_role_id"] = base_role.id
 
         lookup = {

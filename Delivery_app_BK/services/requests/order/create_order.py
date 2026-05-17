@@ -34,6 +34,7 @@ ORDER_ALLOWED_FIELDS = {
     "client_primary_phone",
     "client_secondary_phone",
     "client_address",
+    "help_to_carry",
     "marketing_messages",
     "delivery_windows",
     "order_state_id",
@@ -219,6 +220,12 @@ def parse_create_order_request(raw_fields: dict) -> OrderCreateRequest:
         order_fields["client_address"] = parse_optional_dict(
             raw_fields.get("client_address"),
             field="client_address",
+        )
+
+    if "help_to_carry" in raw_fields:
+        order_fields["help_to_carry"] = parse_required_bool(
+            raw_fields.get("help_to_carry"),
+            field="help_to_carry",
         )
 
     if "marketing_messages" in raw_fields:

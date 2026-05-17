@@ -8,6 +8,8 @@ Routers for the client-form-link feature.
   Public (no auth — token acts as the credential):
     GET  /api/v2/public/client-form/<token>           → fetch safe order data for the form
     POST /api/v2/public/client-form/<token>           → submit client info (invalidates token)
+    GET  /public/client-form/<token>                  → unversioned public form endpoint
+    POST /public/client-form/<token>                  → unversioned public form submission
 """
 
 import os
@@ -30,6 +32,7 @@ from Delivery_app_BK.services.commands.order.client_form.submit_client_form impo
 
 client_form_bp = Blueprint("client_form", __name__)
 public_client_form_bp = Blueprint("public_client_form", __name__)
+public_client_form_root_bp = Blueprint("public_client_form_root", __name__)
 
 CLIENT_FORM_BASE_URL = os.environ.get("CLIENT_FORM_BASE_URL", "https://forms.nextmark.app")
 
@@ -84,9 +87,7 @@ def send_client_form_link_route(order_id: int):
 
 # ── Public ─────────────────────────────────────────────────────────────────────
 
-@public_client_form_bp.route("/public/client-form/<string:token>", methods=["GET"])
-def get_client_form(token: str):
-    """Return the safe order data needed to render the public client form."""
+def _get_client_form_response(token: str):
     try:
         data = get_client_form_data(token)
         return jsonify(data), 200
@@ -100,9 +101,7 @@ def get_client_form(token: str):
         return jsonify({"error": e.message, "code": e.code}), 500
 
 
-@public_client_form_bp.route("/public/client-form/<string:token>", methods=["POST"])
-def submit_client_form_route(token: str):
-    """Accept and persist the client's submitted information."""
+def _submit_client_form_response(token: str):
     payload = request.get_json(force=True) or {}
     try:
         result = submit_client_form(token, payload)
@@ -115,3 +114,27 @@ def submit_client_form_route(token: str):
         return jsonify({"error": e.message, "code": e.code}), 404
     except DomainError as e:
         return jsonify({"error": e.message, "code": e.code}), 500
+
+
+@public_client_form_bp.route("/public/client-form/<string:token>", methods=["GET"])
+def get_client_form(token: str):
+    """Return the safe order data needed to render the public client form."""
+    return _get_client_form_response(token)
+
+
+@public_client_form_bp.route("/public/client-form/<string:token>", methods=["POST"])
+def submit_client_form_route(token: str):
+    """Accept and persist the client's submitted information."""
+    return _submit_client_form_response(token)
+
+
+@public_client_form_root_bp.route("/public/client-form/<string:token>", methods=["GET"])
+def get_client_form_root(token: str):
+    """Return public client form data from the unversioned URL."""
+    return _get_client_form_response(token)
+
+
+@public_client_form_root_bp.route("/public/client-form/<string:token>", methods=["POST"])
+def submit_client_form_root_route(token: str):
+    """Accept public client form submissions from the unversioned URL."""
+    return _submit_client_form_response(token)

@@ -165,7 +165,8 @@ def update_order_tool(
     Update mutable fields on a single order.
     Allowed fields: reference_number, external_source, external_tracking_number,
     external_tracking_link, client_first_name, client_last_name, client_email,
-    client_primary_phone, client_secondary_phone, client_address, order_notes.
+    client_primary_phone, client_secondary_phone, client_address, help_to_carry,
+    order_notes.
     NEVER use this to change order state or delivery plan — use dedicated tools.
     """
     if not fields:
@@ -209,6 +210,7 @@ def create_order_tool(
     client_secondary_phone: dict | None = None,
     # ── delivery address ─────────────────────────────────────────────────
     client_address: dict | None = None,
+    help_to_carry: bool | None = None,
     # ── order metadata ───────────────────────────────────────────────────
     reference_number: str | None = None,
     external_source: str | None = None,
@@ -265,6 +267,8 @@ def create_order_tool(
         fields["client_secondary_phone"] = client_secondary_phone
     if client_address is not None:
         fields["client_address"] = client_address
+    if help_to_carry is not None:
+        fields["help_to_carry"] = help_to_carry
     if reference_number is not None:
         fields["reference_number"] = reference_number
     if external_source is not None:

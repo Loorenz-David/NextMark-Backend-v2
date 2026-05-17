@@ -13,7 +13,7 @@ def _load_blueprints():
     from .ai import ai_bp
     from .auth import auth_bp
     from .bootstrap import bootstrap_bp
-    from .client_form import client_form_bp, public_client_form_bp
+    from .client_form import client_form_bp, public_client_form_bp, public_client_form_root_bp
     from .costumer import costumer_bp
     from .route_plan.local_delivery_plans import route_groups_bp as local_delivery_plans_bp
     from .route_plan.plan import route_plans_bp as plan_bp
@@ -37,7 +37,7 @@ def _load_blueprints():
     from .order import order_bp
     from .order_assignment import order_assignment_bp
     from .order_case import order_case_bp
-    from .order_tracking import public_order_tracking_bp
+    from .order_tracking import public_order_tracking_bp, public_order_tracking_root_bp
     from .seed import seed_bp
     from .team_invitation import team_invitation_bp
     from .team_members import team_bp
@@ -87,7 +87,9 @@ def _load_blueprints():
         "order_case_bp": order_case_bp,
         "drivers_bp": drivers_bp,
         "public_client_form_bp": public_client_form_bp,
+        "public_client_form_root_bp": public_client_form_root_bp,
         "public_order_tracking_bp": public_order_tracking_bp,
+        "public_order_tracking_root_bp": public_order_tracking_root_bp,
         "all": {
             "item_bp": item_bp,
             "item_type_bp": item_type_bp,
@@ -126,7 +128,9 @@ def _load_blueprints():
             "zone_bp": zone_bp,
             "notifications_bp": notifications_bp,
             "public_client_form_bp": public_client_form_bp,
+            "public_client_form_root_bp": public_client_form_root_bp,
             "public_order_tracking_bp": public_order_tracking_bp,
+            "public_order_tracking_root_bp": public_order_tracking_root_bp,
         },
     }
 
@@ -176,7 +180,9 @@ def register_v2_blueprints(app):
     app.register_blueprint(bp["drivers_bp"], url_prefix="/api_v2/drivers")
     app.register_blueprint(bp["client_form_bp"], url_prefix="/api_v2")
     app.register_blueprint(bp["public_client_form_bp"], url_prefix="/api_v2")
+    app.register_blueprint(bp["public_client_form_root_bp"])
     app.register_blueprint(bp["public_order_tracking_bp"], url_prefix="/api_v2")
+    app.register_blueprint(bp["public_order_tracking_root_bp"])
     app.register_blueprint(bp["ai_bp"], url_prefix="/api_v2/ai")
     app.register_blueprint(bp["zone_bp"], url_prefix="/api_v2/zones")
     app.register_blueprint(bp["notifications_bp"], url_prefix="/api_v2/notifications")

@@ -70,7 +70,46 @@ def _open_validated_smtp_client(smtp_config: EmailSMTP) -> smtplib.SMTP:
     return smtp_client
 
 
-def _build_subject(template: MessageTemplate, event_name: str) -> str:
+def _replace_subject_labels(text: str, render_context: MessageRenderContext) -> str:
+    def _replace(match: re.Match[str]) -> str:
+        label_key = match.group(1)
+        return resolve_label(label_key, render_context, channel="email")
+
+    return LABEL_PATTERN.sub(_replace, text)
+
+
+def _render_subject_value(subject_value: Any, render_context: MessageRenderContext) -> str:
+    if subject_value is None:
+        return ""
+
+    if isinstance(subject_value, str):
+        return _replace_subject_labels(subject_value, render_context)
+
+    if isinstance(subject_value, list):
+        return build_message_body(subject_value, render_context, channel="email_subject")
+
+    if isinstance(subject_value, dict):
+        return build_message_body([subject_value], render_context, channel="email_subject")
+
+    return ""
+
+
+def _normalize_email_subject(subject: str) -> str:
+    return " ".join(subject.replace("\r", " ").replace("\n", " ").split())
+
+
+def _build_subject(
+    template: MessageTemplate,
+    event_name: str,
+    render_context: MessageRenderContext | None = None,
+) -> str:
+    if render_context is not None:
+        rendered_subject = _normalize_email_subject(
+            _render_subject_value(template.subject, render_context)
+        )
+        if rendered_subject:
+            return rendered_subject
+
     template_name = (template.name or "").strip()
     if template_name:
         return template_name
@@ -280,7 +319,6 @@ def send_email_batch(
     if template is None or not bool(template.enable):
         return {}
 
-    subject = _build_subject(template, event_name)
     smtp_client: smtplib.SMTP | None = None
     recipient_errors: dict[int, str] = {}
 
@@ -293,6 +331,7 @@ def send_email_batch(
                 continue
 
             try:
+                subject = _build_subject(template, event_name, render_context)
                 final_html = _render_email_html(template.template, render_context)
                 logger.debug(
                     "Sending email | team_id=%s order_id=%s recipient=%s event_name=%s subject=%r html_len=%d",

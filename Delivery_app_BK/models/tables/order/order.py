@@ -60,6 +60,7 @@ class Order(
     client_primary_phone = Column(JSONB().with_variant(JSON, "sqlite"))  
     client_secondary_phone = Column(JSONB().with_variant(JSON, "sqlite"))  
     client_address = Column(JSONB().with_variant(JSON, "sqlite"))  
+    help_to_carry = Column(Boolean, default=False)
 
     operation_type = Column(String, index=True, default="dropoff")
 

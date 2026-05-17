@@ -139,7 +139,10 @@ def get_order_tracking(token: str) -> dict:
 
     return {
         "tracking_number": order.tracking_number,
-        "reference_number": order.order_scalar_id or order.reference_number or None,
+        "order_scalar_id": order.order_scalar_id,
+        "reference_number": order.reference_number,
+        "external_source": order.external_source,
+        "help_to_carry": order.help_to_carry,
         "team_name": team_name,
         "team_timezone": team_timezone,
         "current_status": current_status,

@@ -55,3 +55,28 @@ def test_message_template_rejects_non_json_template_payload():
 
     with pytest.raises(ValidationFailed, match="Invalid template payload"):
         template.template = "not-json"
+
+
+def test_message_template_copies_subject_payload_on_assignment():
+    template = MessageTemplate()
+    payload = [{"type": "label", "labelKey": "client_first_name"}]
+
+    template.subject = payload
+    payload.append({"text": " mutated later"})
+
+    assert template.subject == [{"type": "label", "labelKey": "client_first_name"}]
+
+
+def test_message_template_accepts_plain_string_subject():
+    template = MessageTemplate()
+
+    template.subject = "Delivery update for {{ client_first_name }}"
+
+    assert template.subject == "Delivery update for {{ client_first_name }}"
+
+
+def test_message_template_rejects_invalid_subject_payload():
+    template = MessageTemplate()
+
+    with pytest.raises(ValidationFailed, match="Invalid subject payload"):
+        template.subject = 123

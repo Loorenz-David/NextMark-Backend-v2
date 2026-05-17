@@ -49,6 +49,7 @@ def serialize_created_order(instance: Order) -> dict:
         "client_primary_phone": instance.client_primary_phone,
         "client_secondary_phone": instance.client_secondary_phone,
         "client_address": instance.client_address,
+        "help_to_carry": instance.help_to_carry,
         "marketing_messages": instance.marketing_messages,
         "creation_date": creation_date.isoformat() if creation_date else None,
         "items_updated_at": instance.items_updated_at.isoformat() if instance.items_updated_at else None,

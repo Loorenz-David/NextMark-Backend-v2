@@ -70,6 +70,7 @@ MUTABLE_FIELDS = {
     "client_primary_phone",
     "client_secondary_phone",
     "client_address",
+    "help_to_carry",
     "marketing_messages",
     "delivery_windows",
     "order_notes",

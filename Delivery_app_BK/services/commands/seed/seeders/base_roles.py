@@ -12,8 +12,11 @@ def seed_base_roles(ctx: ServiceContext) -> Dict[str, BaseRole]:
 
     for payload in BASE_ROLE_SEEDS:
         fields = ensure_client_id(dict(payload))
-        lookup = {"role_name": fields["role_name"]}
+        role_name = str(fields.get("role_name", "")).strip().lower()
+        fields["role_name"] = role_name
+
+        lookup = {"role_name": role_name}
         instance, _ = get_or_create(ctx, BaseRole, lookup, fields)
-        base_roles[fields["role_name"]] = instance
+        base_roles[role_name] = instance
 
     return base_roles

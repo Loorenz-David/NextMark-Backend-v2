@@ -177,10 +177,29 @@ def _build_stop_client_label(order: Order | None) -> str | None:
         if last:
             parts.append(last[0].upper() + ".")
         return " ".join(parts)
+
+    external_source = getattr(order, "external_source", None)
+    reference_number = getattr(order, "reference_number", None)
+    if (
+        isinstance(external_source, str)
+        and external_source.strip()
+        and isinstance(reference_number, str)
+        and reference_number.strip()
+    ):
+        return _format_order_reference_label(reference_number.strip())
+
     scalar_id = getattr(order, "order_scalar_id", None)
     if isinstance(scalar_id, int):
         return f"Order #{scalar_id}"
+    if isinstance(reference_number, str) and reference_number.strip():
+        return _format_order_reference_label(reference_number.strip())
     return None
+
+
+def _format_order_reference_label(reference: str) -> str:
+    if reference.startswith("#"):
+        return f"Order {reference}"
+    return f"Order #{reference}"
 
 
 def _format_stop_arrival_label(arrival_time: datetime | None, tz_str: str) -> str | None:

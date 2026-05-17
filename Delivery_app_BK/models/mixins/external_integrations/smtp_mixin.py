@@ -45,11 +45,41 @@ class SMTPMixin:
         client_email = client.get('client_email')   
         if client_email is None:
             raise ValueError('Missing eamil.')
+
+        def render_subject_value(value):
+            if value is None:
+                return ""
+            if isinstance(value, str):
+                return value.format_map(SafeDict(client))
+            if isinstance(value, list):
+                return "".join(render_subject_value(child) for child in value)
+            if isinstance(value, dict):
+                node_type = value.get("type")
+                if node_type == "label":
+                    label_key = value.get("labelKey") or value.get("label_key") or value.get("id")
+                    return str(client.get(label_key, f"{{{label_key}}}")) if label_key else ""
+                text_value = value.get("text")
+                if isinstance(text_value, str):
+                    return text_value.format_map(SafeDict(client))
+                children = value.get("children")
+                if isinstance(children, list):
+                    return "".join(render_subject_value(child) for child in children)
+            return ""
+
+        subject = " ".join(
+            (
+                render_subject_value(getattr(message_template, "subject", None))
+                or getattr(message_template, "name", "")
+            )
+            .replace("\r", " ")
+            .replace("\n", " ")
+            .split()
+        )
         
         message = EmailMessage()
         message["From"] = self.smtp_username                
         message["To"] = client_email        
-        message["Subject"] = message_template.name     
+        message["Subject"] = subject     
 
         template:str = message_template.content   
         temp = template.format_map(SafeDict(client))  

@@ -9,6 +9,8 @@ def test_get_client_form_data_serializes_items_using_item_type(monkeypatch):
         (),
         {
             "order_scalar_id": 101,
+            "reference_number": "REF-101",
+            "external_source": "shopify",
             "team_id": 7,
             "team": type("TeamStub", (), {"name": "Demo Team", "time_zone": "Europe/Stockholm"})(),
             "items": [
@@ -25,10 +27,12 @@ def test_get_client_form_data_serializes_items_using_item_type(monkeypatch):
 
     assert result == {
         "order_scalar_id": 101,
+        "reference_number": "REF-101",
+        "external_source": "shopify",
         "team_timezone": "Europe/Stockholm",
         "items": [
-            {"name": "Chair", "quantity": 2},
-            {"name": "Lamp", "quantity": 1},
+            {"item_type": "Chair", "quantity": 2},
+            {"item_type": "Lamp", "quantity": 1},
         ],
         "expires_at": "2026-04-11T12:00:00+00:00",
     }

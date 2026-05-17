@@ -800,19 +800,49 @@ def _build_order_updated_description(*, order_label: str, payload: dict) -> str:
 
 
 def _build_order_label(order: Order | None) -> str:
-    scalar_id = getattr(order, "order_scalar_id", None) if order is not None else None
-
-    if isinstance(scalar_id, int):
-        return f"Order #{scalar_id}"
-
-    reference = order.reference_number if order and order.reference_number else None
-    if reference:
-        return f"Order #{reference}"
+    reference = _resolve_notification_order_reference(order)
+    if reference is not None:
+        return _format_order_reference_label(reference)
 
     if order and isinstance(order.id, int):
         return f"Order #{order.id}"
 
     return "Order"
+
+
+def _format_order_reference_label(reference: int | str) -> str:
+    if isinstance(reference, int):
+        return f"Order #{reference}"
+
+    normalized = reference.strip()
+    if normalized.startswith("#"):
+        return f"Order {normalized}"
+    return f"Order #{normalized}"
+
+
+def _resolve_notification_order_reference(order: Order | None) -> int | str | None:
+    if order is None:
+        return None
+
+    external_source = getattr(order, "external_source", None)
+    reference_number = getattr(order, "reference_number", None)
+    if (
+        isinstance(external_source, str)
+        and external_source.strip()
+        and isinstance(reference_number, str)
+        and reference_number.strip()
+    ):
+        return reference_number.strip()
+
+    scalar_id = getattr(order, "order_scalar_id", None) if order is not None else None
+
+    if isinstance(scalar_id, int):
+        return scalar_id
+
+    if isinstance(reference_number, str) and reference_number.strip():
+        return reference_number.strip()
+
+    return None
 
 
 def _resolve_preview_order(

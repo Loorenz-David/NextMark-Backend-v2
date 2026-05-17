@@ -5,21 +5,21 @@ def build_seed_payloads():
     base_roles = [
         {
             "id": 1,
-            "role_name": "ADMIN",
+            "role_name": "admin",
             "description": "System administrator role.",
             "is_system": True,
             "client_id": generate_client_id('base_role'),
         },
         {
             "id": 2,
-            "role_name": "ASSISTANT",
+            "role_name": "assistant",
             "description": "System assistant role.",
             "is_system": True,
             "client_id": generate_client_id('base_role'),
         },
         {
             "id": 3,
-            "role_name": "DRIVER",
+            "role_name": "driver",
             "description": "System driver role.",
             "is_system": True,
             "client_id": generate_client_id('base_role'),
@@ -29,27 +29,27 @@ def build_seed_payloads():
     user_roles = [
         {
             "id": 1,
-            "role_name": "Admin",
+            "role_name": "admin",
             "description": "Default admin user role.",
             "is_system": True,
             "client_id": generate_client_id('user_role'),
-            "base_role_key": "ADMIN",
+            "base_role_key": "admin",
         },
         {
             "id": 2,
-            "role_name": "Assistant",
+            "role_name": "assistant",
             "description": "Default assistant user role.",
             "is_system": True,
             "client_id": generate_client_id('user_role'),
-            "base_role_key": "ASSISTANT",
+            "base_role_key": "assistant",
         },
         {
             "id": 3,
-            "role_name": "Driver",
+            "role_name": "driver",
             "description": "Default driver user role.",
             "is_system": True,
             "client_id": generate_client_id('user_role'),
-            "base_role_key": "DRIVER",
+            "base_role_key": "driver",
         },
     ]
 

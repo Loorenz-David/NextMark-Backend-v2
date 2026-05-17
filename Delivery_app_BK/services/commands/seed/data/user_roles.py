@@ -1,23 +1,23 @@
 USER_ROLE_SEEDS = [
     {
         "id": 1,
-        "role_name": "Admin",
+        "role_name": "admin",
         "description": "Default admin user role.",
         "is_system": True,
-        "base_role_key": "ADMIN",
+        "base_role_key": "admin",
     },
     {
         "id": 2,
-        "role_name": "Assistant",
+        "role_name": "assistant",
         "description": "Default assistant user role.",
         "is_system": True,
-        "base_role_key": "ASSISTANT",
+        "base_role_key": "assistant",
     },
     {
         "id": 3,
-        "role_name": "Driver",
+        "role_name": "driver",
         "description": "Default driver user role.",
         "is_system": True,
-        "base_role_key": "DRIVER",
+        "base_role_key": "driver",
     },
 ]
