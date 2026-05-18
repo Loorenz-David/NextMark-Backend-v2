@@ -811,7 +811,6 @@ def apply_orders_route_plan_unassign(
 
         _set_order_route_plan_id(order_instance, None)
         _set_order_route_group_id(order_instance, None)
-        order_instance.order_plan_objective = None
 
         change_result = apply_order_plan_change(
             ctx=ctx,

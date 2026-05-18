@@ -18,9 +18,20 @@ from Delivery_app_BK.services.commands.order_assignment import (
 from Delivery_app_BK.services.context import ServiceContext
 from Delivery_app_BK.services.requests.common.types import parse_optional_int
 from Delivery_app_BK.services.run_service import run_service
+from Delivery_app_BK.errors import ValidationFailed
 
 
 order_assignment_bp = Blueprint("api_v2_order_assignment_bp", __name__)
+
+
+def _parse_batch_plan_id(plan_id: str) -> int | None:
+    normalized = (plan_id or "").strip().lower()
+    if normalized in {"null", "none"}:
+        return None
+    try:
+        return int(normalized)
+    except (TypeError, ValueError) as exc:
+        raise ValidationFailed("plan_id must be an integer or null.") from exc
 
 
 @order_assignment_bp.route("/orders/<int:order_id>/plan/<int:plan_id>", methods=["PATCH"])
@@ -106,15 +117,16 @@ def resolve_order_batch_selection():
     )
 
 
-@order_assignment_bp.route("/plans/<int:plan_id>/batch", methods=["PATCH"])
+@order_assignment_bp.route("/plans/<plan_id>/batch", methods=["PATCH"])
 @jwt_required()
 @role_required([ADMIN, ASSISTANT])
-def assign_orders_to_plan_batch(plan_id: int):
+def assign_orders_to_plan_batch(plan_id: str):
     import time
     time.sleep(5)  # Simulate a long-running operation
     identity = get_jwt()
     incoming_data = request.get_json(silent=True) or {}
     prevent_event_bus = incoming_data.pop("prevent_event_bus", False)
+    resolved_plan_id = _parse_batch_plan_id(plan_id)
     destination_route_group_id = parse_optional_int(
         incoming_data.get("route_group_id"),
         field="route_group_id",
@@ -128,7 +140,7 @@ def assign_orders_to_plan_batch(plan_id: int):
     outcome = run_service(
         lambda c: assign_orders_to_plan_batch_service(
             c,
-            plan_id,
+            resolved_plan_id,
             destination_route_group_id=destination_route_group_id,
         ),
         ctx,

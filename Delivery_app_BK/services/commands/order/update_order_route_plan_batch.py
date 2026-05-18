@@ -40,7 +40,7 @@ def resolve_orders_selection(ctx: ServiceContext) -> dict:
 
 def update_orders_route_plan_batch(
     ctx: ServiceContext,
-    plan_id: int,
+    plan_id: int | None,
     destination_route_group_id: int | None = None,
 ) -> dict:
     selection = parse_update_orders_route_plan_batch_payload(ctx.incoming_data)

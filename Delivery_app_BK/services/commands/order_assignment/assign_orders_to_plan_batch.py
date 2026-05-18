@@ -6,7 +6,7 @@ from Delivery_app_BK.services.context import ServiceContext
 
 def assign_orders_to_plan_batch(
     ctx: ServiceContext,
-    plan_id: int,
+    plan_id: int | None,
     destination_route_group_id: int | None = None,
 ) -> dict:
     return update_orders_route_plan_batch(

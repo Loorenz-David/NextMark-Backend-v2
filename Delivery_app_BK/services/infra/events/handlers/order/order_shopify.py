@@ -1,5 +1,6 @@
 from Delivery_app_BK.models import Order, OrderScheduleTarget, RoutePlan, db
 from Delivery_app_BK.services.domain.order.shopify import (
+    is_shopify_order,
     should_fulfill_shopify_order,
     should_notify_order_schedule,
 )
@@ -10,6 +11,9 @@ from Delivery_app_BK.services.infra.tasks.order.fulfill_shopify_order import (
 )
 from Delivery_app_BK.services.infra.tasks.order.notify_order_schedule_action import (
     notify_order_schedule_action,
+)
+from Delivery_app_BK.services.infra.tasks.order.push_external_schedule_action import (
+    push_external_schedule_action,
 )
 
 
@@ -70,6 +74,42 @@ def notify_schedule_targets_on_delivery_rescheduled(order_event) -> None:
         order_event=order_event,
         order=order,
         scheduled_date=str(new_plan_start)[:10],
+    )
+
+
+def push_external_schedule_on_delivery_rescheduled(order_event) -> None:
+    order = getattr(order_event, "order", None)
+    if order is None:
+        order = db.session.get(Order, getattr(order_event, "order_id", None))
+    if order is None or not is_shopify_order(order):
+        return
+
+    run_immediate_action(
+        order_event,
+        "order_external_schedule_push",
+        push_external_schedule_action,
+    )
+
+
+def push_external_schedule_on_delivery_plan_unassigned(order_event) -> None:
+    payload = getattr(order_event, "payload", None) or {}
+    new_plan_id = payload.get("new_route_plan_id")
+    if new_plan_id is None:
+        new_plan_id = payload.get("new_delivery_plan_id")
+    if new_plan_id is not None:
+        return
+
+    order = getattr(order_event, "order", None)
+    if order is None:
+        order = db.session.get(Order, getattr(order_event, "order_id", None))
+    if order is None or not is_shopify_order(order):
+        return
+
+    run_immediate_action(
+        order_event,
+        "order_external_schedule_push",
+        push_external_schedule_action,
+        action_scope="unassigned",
     )
 
 

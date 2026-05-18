@@ -138,3 +138,97 @@ def test_build_state_changes_bundle_serializes_route_groups_and_plans():
             {"id": 2, "state_id": 2, "total_orders": 0},
         ],
     }
+
+
+def test_apply_orders_route_plan_unassign_preserves_order_plan_objective(monkeypatch):
+    order = SimpleNamespace(
+        id=1,
+        route_plan_id=10,
+        route_group_id=20,
+        order_plan_objective="local_delivery",
+    )
+    plan = SimpleNamespace(
+        id=10,
+        route_groups=[],
+        total_weight_g=None,
+        total_volume_cm3=None,
+        total_item_count=None,
+        total_orders=0,
+    )
+    ctx = SimpleNamespace(set_warning=lambda *_args, **_kwargs: None)
+
+    monkeypatch.setattr(module, "_resolve_orders_for_update", lambda *_args, **_kwargs: {1: order})
+    monkeypatch.setattr(module, "_get_order_route_plan_id", lambda instance: instance.route_plan_id)
+    monkeypatch.setattr(module, "_get_order_route_group_id", lambda instance: instance.route_group_id)
+    monkeypatch.setattr(module, "_load_route_plans_by_id", lambda *_args, **_kwargs: {10: plan})
+    monkeypatch.setattr(
+        module,
+        "build_plan_change_apply_context",
+        lambda **_kwargs: SimpleNamespace(source_route_group_id_by_order_id={}),
+    )
+    monkeypatch.setattr(
+        module,
+        "_prepare_old_local_delivery_batch_changes",
+        lambda **_kwargs: {
+            "order_ids": set(),
+            "instances": [],
+            "post_flush_actions": [],
+            "updated_stops": [],
+            "synced_stops": [],
+            "updated_route_solutions": [],
+            "synced_route_solutions": [],
+        },
+    )
+    monkeypatch.setattr(module, "_set_order_route_plan_id", lambda instance, value: setattr(instance, "route_plan_id", value))
+    monkeypatch.setattr(module, "_set_order_route_group_id", lambda instance, value: setattr(instance, "route_group_id", value))
+    monkeypatch.setattr(
+        module,
+        "apply_order_plan_change",
+        lambda **_kwargs: SimpleNamespace(
+            instances=[],
+            post_flush_actions=[],
+            serialize_bundle=lambda: {},
+        ),
+    )
+    monkeypatch.setattr(module, "build_route_plan_changed_event", lambda *_args, **_kwargs: {"event_name": "changed"})
+    monkeypatch.setattr(module, "_sanitize_instances_for_session", lambda instances: instances)
+    monkeypatch.setattr(module, "touch_route_freshness", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "recompute_plan_totals", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "recompute_route_group_totals", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "recompute_plan_order_counts", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "maybe_auto_complete_plan", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "recompute_route_group_order_counts", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "maybe_sync_route_group_state", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "maybe_sync_plan_state_from_groups", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        module,
+        "_serialize_old_local_delivery_batch_bundle",
+        lambda **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        module,
+        "_build_state_changes_bundle",
+        lambda **_kwargs: {"route_groups": [], "route_plans": []},
+    )
+    monkeypatch.setattr(
+        module,
+        "serialize_created_order",
+        lambda instance: {
+            "id": instance.id,
+            "route_plan_id": instance.route_plan_id,
+            "route_group_id": instance.route_group_id,
+            "order_plan_objective": instance.order_plan_objective,
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "db",
+        SimpleNamespace(session=SimpleNamespace(add_all=lambda *_args, **_kwargs: None, flush=lambda: None)),
+    )
+
+    result = module.apply_orders_route_plan_unassign(ctx, [1])
+
+    assert order.route_plan_id is None
+    assert order.route_group_id is None
+    assert order.order_plan_objective == "local_delivery"
+    assert result["updated"][0]["order"]["order_plan_objective"] == "local_delivery"

@@ -16,6 +16,8 @@ from Delivery_app_BK.services.infra.events.handlers.order.order_email import (
 )
 from Delivery_app_BK.services.infra.events.handlers.order.order_shopify import (
     notify_schedule_targets_on_delivery_rescheduled,
+    push_external_schedule_on_delivery_plan_unassigned,
+    push_external_schedule_on_delivery_rescheduled,
     notify_schedule_targets_on_order_created,
     sync_shopify_fulfillment_on_order_completed,
 )
@@ -127,6 +129,10 @@ def register_order_event_handlers(event_bus: EventBus) -> None:
         send_email_on_order_delivery_plan_changed,
     )
     event_bus.register(
+        OrderEvent.DELIVERY_PLAN_CHANGED.value,
+        push_external_schedule_on_delivery_plan_unassigned,
+    )
+    event_bus.register(
         OrderEvent.DELIVERY_RESCHEDULED.value,
         send_sms_on_order_delivery_rescheduled,
     )
@@ -137,6 +143,10 @@ def register_order_event_handlers(event_bus: EventBus) -> None:
     event_bus.register(
         OrderEvent.DELIVERY_RESCHEDULED.value,
         notify_schedule_targets_on_delivery_rescheduled,
+    )
+    event_bus.register(
+        OrderEvent.DELIVERY_RESCHEDULED.value,
+        push_external_schedule_on_delivery_rescheduled,
     )
 
     event_bus.register(

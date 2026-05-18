@@ -148,3 +148,70 @@ def test_notify_schedule_targets_on_delivery_rescheduled_skips_non_external_orde
     )
 
     assert calls == []
+
+
+def test_push_external_schedule_on_delivery_rescheduled_enqueues_action(monkeypatch):
+    calls: list[dict] = []
+    order = SimpleNamespace(id=18, team_id=7, external_source="shopify", external_order_id="12345")
+    order_event = SimpleNamespace(order=order, order_id=18, payload={})
+
+    monkeypatch.setattr(
+        module,
+        "run_immediate_action",
+        lambda order_event_arg, action_name, runner, **kwargs: calls.append(
+            {
+                "order_event": order_event_arg,
+                "action_name": action_name,
+                "runner": runner,
+                **kwargs,
+            }
+        ),
+    )
+
+    module.push_external_schedule_on_delivery_rescheduled(order_event)
+
+    assert len(calls) == 1
+    assert calls[0]["order_event"] is order_event
+    assert calls[0]["action_name"] == "order_external_schedule_push"
+
+
+def test_push_external_schedule_on_delivery_plan_unassigned_enqueues_action(monkeypatch):
+    calls: list[dict] = []
+    order = SimpleNamespace(id=18, team_id=7, external_source="shopify", external_order_id="12345")
+    order_event = SimpleNamespace(order=order, order_id=18, payload={"new_route_plan_id": None})
+
+    monkeypatch.setattr(
+        module,
+        "run_immediate_action",
+        lambda order_event_arg, action_name, runner, **kwargs: calls.append(
+            {
+                "order_event": order_event_arg,
+                "action_name": action_name,
+                "runner": runner,
+                **kwargs,
+            }
+        ),
+    )
+
+    module.push_external_schedule_on_delivery_plan_unassigned(order_event)
+
+    assert len(calls) == 1
+    assert calls[0]["order_event"] is order_event
+    assert calls[0]["action_name"] == "order_external_schedule_push"
+    assert calls[0]["action_scope"] == "unassigned"
+
+
+def test_push_external_schedule_on_delivery_plan_unassigned_skips_when_still_assigned(monkeypatch):
+    calls: list[dict] = []
+    order = SimpleNamespace(id=18, team_id=7, external_source="shopify", external_order_id="12345")
+    order_event = SimpleNamespace(order=order, order_id=18, payload={"new_route_plan_id": 99})
+
+    monkeypatch.setattr(
+        module,
+        "run_immediate_action",
+        lambda order_event_arg, action_name, runner, **kwargs: calls.append({"action_name": action_name}),
+    )
+
+    module.push_external_schedule_on_delivery_plan_unassigned(order_event)
+
+    assert calls == []

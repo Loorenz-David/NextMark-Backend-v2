@@ -56,6 +56,9 @@ class Config:
     # Integrations
     # ------------------------------------------------------------------
     LOGISTIC_API_KEY = os.environ.get("LOGISTIC_API_KEY")
+    EXTERNAL_API_URL = os.environ.get("EXTERNAL_API_URL")
+    EXTERNAL_API_KEY = os.environ.get("EXTERNAL_API_KEY")
+    EXTERNAL_API_TIMEOUT_SECONDS = int(os.environ.get("EXTERNAL_API_TIMEOUT_SECONDS", "10"))
 
 
 

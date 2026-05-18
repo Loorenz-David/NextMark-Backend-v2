@@ -44,6 +44,14 @@ def create_app(config_name="development"):
     # app configuration
     app.config.from_object(config_map.get(config_name))
 
+    # Config class attributes are evaluated at import time (before load_dotenv runs),
+    # so any env vars that weren't set at module import must be re-applied here.
+    app.config.update(
+        EXTERNAL_API_URL=os.environ.get("EXTERNAL_API_URL"),
+        EXTERNAL_API_KEY=os.environ.get("EXTERNAL_API_KEY"),
+        EXTERNAL_API_TIMEOUT_SECONDS=int(os.environ.get("EXTERNAL_API_TIMEOUT_SECONDS", "10")),
+    )
+
     frontend_origins = os.environ.get("FRONTEND_ORIGINS", "http://localhost:5173").split(',')
 
     CORS(
