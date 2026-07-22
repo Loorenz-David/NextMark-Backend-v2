@@ -3,9 +3,23 @@ from types import SimpleNamespace
 
 from Delivery_app_BK.services.domain.order.order_events import OrderEvent
 from Delivery_app_BK.services.infra.events.builders.order import (
+    build_client_form_submitted_event,
     build_route_plan_changed_event,
     build_delivery_window_rescheduled_by_user_event,
 )
+
+
+def test_build_client_form_submitted_event_has_empty_payload():
+    order = SimpleNamespace(id=21, team_id=8)
+
+    event = build_client_form_submitted_event(order)
+
+    assert event == {
+        "order_id": 21,
+        "team_id": 8,
+        "event_name": OrderEvent.CLIENT_FORM_SUBMITTED.value,
+        "payload": {},
+    }
 
 
 def test_build_delivery_window_rescheduled_by_user_event_formats_payload():

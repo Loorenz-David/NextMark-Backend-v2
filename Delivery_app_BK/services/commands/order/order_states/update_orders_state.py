@@ -36,70 +36,88 @@ from ....queries.get_instance import get_instance
 
 
 
+def apply_orders_state_transition(
+    ctx: ServiceContext,
+    orders: int | List[int] | List[Order],
+    state_id: int,
+) -> tuple[list[Order], list[dict]]:
+    """Apply an order-state transition inside the caller's transaction.
+
+    This function intentionally does not begin, commit, or emit events. Callers
+    that already own a transaction can use it to reuse the complete order-state
+    transition behavior without committing unrelated work early.
+    """
+    if isinstance(state_id, bool) or not isinstance(state_id, int):
+        raise ValidationFailed("state_id must be an integer.")
+
+    try:
+        state_instance: OrderState = get_instance(ctx, OrderState, state_id)
+    except NoResultFound as exc:
+        raise NotFound(str(exc)) from exc
+
+    failure_note_payload = _parse_failure_note_payload(
+        _extract_incoming_order_note(getattr(ctx, "incoming_data", None))
+    )
+    is_fail_transition_target = str(getattr(state_instance, "name", "")).strip().casefold() == "fail"
+
+    order_instances: list[Order] = _resolve_orders(ctx, orders)
+    if not order_instances:
+        return [], []
+
+    changed_orders: list[Order] = []
+    pending_events: list[dict] = []
+    for order_instance in order_instances:
+        old_state_id = order_instance.order_state_id
+        if old_state_id == state_instance.id:
+            continue
+
+        order_instance.order_state_id = state_instance.id
+        if is_fail_transition_target and failure_note_payload is not None:
+            current_notes = (
+                list(order_instance.order_notes)
+                if isinstance(getattr(order_instance, "order_notes", None), list)
+                else []
+            )
+            current_notes.append(dict(failure_note_payload))
+            order_instance.order_notes = current_notes
+        changed_orders.append(order_instance)
+        pending_events.extend(
+            build_order_state_transition_events(
+                order_instance=order_instance,
+                old_state_id=old_state_id,
+                state_instance=state_instance,
+            )
+        )
+
+    if changed_orders:
+        _recompute_and_auto_complete_plans(changed_orders)
+
+    return changed_orders, pending_events
+
+
 def update_orders_state(
     ctx: ServiceContext,
     orders: int | List[int] | List[Order],
     state_id: int,
 ):
-    if isinstance(state_id, bool) or not isinstance(state_id, int):
-        raise ValidationFailed("state_id must be an integer.")
-
-    changed_orders: list[Order] = []
+    changed_orders_result: list[Order] = []
     pending_events: list[dict] = []
-
-    def _apply() -> list[Order]:
-        try:
-            state_instance: OrderState = get_instance(ctx, OrderState, state_id)
-        except NoResultFound as exc:
-            raise NotFound(str(exc)) from exc
-
-        failure_note_payload = _parse_failure_note_payload(
-            _extract_incoming_order_note(getattr(ctx, "incoming_data", None))
-        )
-        is_fail_transition_target = str(getattr(state_instance, "name", "")).strip().casefold() == "fail"
-
-        order_instances: list[Order] = _resolve_orders(ctx, orders)
-        if not order_instances:
-            return []
-
-        changed_orders.clear()
-        pending_events.clear()
-        for order_instance in order_instances:
-            old_state_id = order_instance.order_state_id
-            if old_state_id == state_instance.id:
-                continue
-
-            order_instance.order_state_id = state_instance.id
-            if is_fail_transition_target and failure_note_payload is not None:
-                current_notes = (
-                    list(order_instance.order_notes)
-                    if isinstance(getattr(order_instance, "order_notes", None), list)
-                    else []
-                )
-                current_notes.append(dict(failure_note_payload))
-                order_instance.order_notes = current_notes
-            changed_orders.append(order_instance)
-            pending_events.extend(
-                build_order_state_transition_events(
-                    order_instance=order_instance,
-                    old_state_id=old_state_id,
-                    state_instance=state_instance,
-                )
-            )
-
-        return changed_orders
 
     try:
         with db.session.begin():
-            changed_orders_result = _apply()
-            if changed_orders_result:
-                _recompute_and_auto_complete_plans(changed_orders_result)
+            changed_orders_result, pending_events = apply_orders_state_transition(
+                ctx=ctx,
+                orders=orders,
+                state_id=state_id,
+            )
     except InvalidRequestError as exc:
         if "already begun" not in str(exc).lower():
             raise
-        changed_orders_result = _apply()
-        if changed_orders_result:
-            _recompute_and_auto_complete_plans(changed_orders_result)
+        changed_orders_result, pending_events = apply_orders_state_transition(
+            ctx=ctx,
+            orders=orders,
+            state_id=state_id,
+        )
 
     if pending_events:
         emit_order_events(ctx, pending_events)

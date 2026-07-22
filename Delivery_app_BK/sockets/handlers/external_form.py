@@ -10,32 +10,36 @@ from Delivery_app_BK.sockets.contracts.realtime import (
 from Delivery_app_BK.sockets.rooms.names import build_external_form_room
 
 
+def _team_id(claims):
+    return claims.get("active_team_id") or claims.get("team_id")
+
+
 @authenticated_socket_event
 def handle_external_form_join_user(claims, data):
-    team_id = claims.get("active_team_id") or claims.get("team_id")
-    target_user_id = (data or {}).get("user_id")
-    if team_id is None or target_user_id is None:
+    # Team-scoped room: any team device joins the same external-form channel,
+    # so trusted-device user switching does not change room membership. The
+    # payload user_id (if any) is ignored on purpose.
+    team_id = _team_id(claims)
+    if team_id is None:
         return
 
-    join_room(build_external_form_room(team_id, target_user_id), sid=request.sid)
+    join_room(build_external_form_room(team_id), sid=request.sid)
 
 
 @authenticated_socket_event
 def handle_external_form_leave_user(claims, data):
-    team_id = claims.get("active_team_id") or claims.get("team_id")
-    target_user_id = (data or {}).get("user_id")
-    if team_id is None or target_user_id is None:
+    team_id = _team_id(claims)
+    if team_id is None:
         return
 
-    leave_room(build_external_form_room(team_id, target_user_id), sid=request.sid)
+    leave_room(build_external_form_room(team_id), sid=request.sid)
 
 
 @authenticated_socket_event
 def handle_external_form_submit_user(claims, data):
-    team_id = claims.get("active_team_id") or claims.get("team_id")
-    target_user_id = (data or {}).get("user_id")
+    team_id = _team_id(claims)
     form_data = (data or {}).get("form_data")
-    if team_id is None or target_user_id is None or not form_data:
+    if team_id is None or not form_data:
         return
 
     socketio.emit(
@@ -44,25 +48,23 @@ def handle_external_form_submit_user(claims, data):
             "form_data": form_data,
             "submitted_by": claims.get("user_id"),
         },
-        room=build_external_form_room(team_id, target_user_id),
+        room=build_external_form_room(team_id),
         skip_sid=request.sid,
     )
 
 
 @authenticated_socket_event
 def handle_external_form_request_user(claims, data):
-    team_id = claims.get("active_team_id") or claims.get("team_id")
-    target_user_id = (data or {}).get("user_id")
-    request_data = (data or {}).get("request_data")
-    if team_id is None or target_user_id is None:
+    team_id = _team_id(claims)
+    if team_id is None:
         return
 
     socketio.emit(
         SERVER_EVENT_EXTERNAL_FORM_REQUESTED,
         {
-            "request_data": request_data or {},
+            "request_data": (data or {}).get("request_data") or {},
             "requested_by": claims.get("user_id"),
         },
-        room=build_external_form_room(team_id, target_user_id),
+        room=build_external_form_room(team_id),
         skip_sid=request.sid,
     )

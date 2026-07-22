@@ -24,6 +24,7 @@ from Delivery_app_BK.services.commands.order.update_extensions import (
     build_order_update_extension_context,
 )
 from Delivery_app_BK.services.infra.events.builders.order import (
+    build_client_form_submitted_event,
     build_delivery_window_rescheduled_by_user_event,
     build_order_edited_event,
 )
@@ -77,6 +78,14 @@ MUTABLE_FIELDS = {
 }
 
 ADDRESS_FIELDS = {"client_address"}
+CUSTOMER_FIELDS = {
+    "client_first_name",
+    "client_last_name",
+    "client_email",
+    "client_primary_phone",
+    "client_secondary_phone",
+    "client_address",
+}
 WINDOW_FIELDS = {
     "delivery_windows",
 }
@@ -201,6 +210,10 @@ def apply_order_updates(
             old_values=old_driver_visible_values,
             new_values=new_driver_visible_values,
         )
+        customer_fields_changed = _customer_fields_changed(
+            old_values=old_driver_visible_values,
+            new_values=new_driver_visible_values,
+        )
         if changed_sections:
             if "schedule" in changed_sections:
                 pending_events.append(
@@ -220,6 +233,8 @@ def apply_order_updates(
                         changed_sections=list(changed_sections),
                     )
                 )
+        if customer_fields_changed:
+            pending_events.append(build_client_form_submitted_event(existing))
 
         flags = _build_change_flags(old_values, new_values, fields_to_apply)
         order_deltas.append(
@@ -308,6 +323,17 @@ def _resolve_changed_sections(
         changed_sections.append("schedule")
 
     return tuple(changed_sections)
+
+
+def _customer_fields_changed(
+    *,
+    old_values: dict[str, Any],
+    new_values: dict[str, Any],
+) -> bool:
+    return any(
+        old_values.get(field) != new_values.get(field)
+        for field in CUSTOMER_FIELDS
+    )
 
 
 def _resolve_delivery_plan_for_order(order: Order) -> DeliveryPlan | None:

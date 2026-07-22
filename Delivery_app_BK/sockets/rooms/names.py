@@ -30,8 +30,12 @@ def build_order_chat_room(team_id: int | str, order_id: int | str) -> str:
     return f"team:{team_id}:order_chat:{order_id}"
 
 
-def build_external_form_room(team_id: int | str, user_id: int | str) -> str:
-    return f"external_form:{team_id}:{user_id}"
+def build_external_form_room(team_id: int | str) -> str:
+    # Team-scoped: the external-form channel pairs the operator device with the
+    # team's customer tablet regardless of which user is active. Deliberately
+    # not per-user so trusted-device user switching does not break delivery.
+    # Assumes one external station per team and one exchange at a time.
+    return f"external_form:{team_id}"
 
 
 def build_team_members_room(team_id: int | str) -> str:

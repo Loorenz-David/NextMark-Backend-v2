@@ -27,6 +27,8 @@ def test_login_user_passes_timezone_to_token_builder(monkeypatch):
     monkeypatch.setattr(module, "parse_login_request", lambda raw: login_request)
     monkeypatch.setattr(module.db.session, "query", lambda model: _DummyQuery(user))
     monkeypatch.setattr(module.db.session, "commit", lambda: None)
+    # No trusted-device credentials: ordinary single-user login path.
+    monkeypatch.setattr(module, "resolve_trusted_device", lambda ctx: None)
 
     def _fake_build_user_tokens(user_instance, *, app_scope=None, time_zone=None):
         captured["user"] = user_instance
@@ -38,6 +40,7 @@ def test_login_user_passes_timezone_to_token_builder(monkeypatch):
 
     result = module.login_user_service(SimpleNamespace(incoming_data={"x": "y"}))
 
+    assert result["authentication_mode"] == "single_user"
     assert result["access_token"] == "token"
     assert captured["user"] is user
     assert captured["app_scope"] == "admin"

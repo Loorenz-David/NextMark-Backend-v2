@@ -1,4 +1,5 @@
 from .order_events import (
+    build_client_form_submitted_event,
     build_delivery_rescheduled_event,
     build_route_plan_changed_event,
     build_delivery_plan_changed_event,
@@ -11,6 +12,7 @@ from .order_events import (
 )
 
 __all__ = [
+    "build_client_form_submitted_event",
     "build_delivery_rescheduled_event",
     "build_route_plan_changed_event",
     "build_delivery_plan_changed_event",

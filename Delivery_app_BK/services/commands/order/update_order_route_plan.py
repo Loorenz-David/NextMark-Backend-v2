@@ -49,6 +49,7 @@ from Delivery_app_BK.services.domain.state_transitions.route_group_state_engine 
 )
 from Delivery_app_BK.services.domain.state_transitions.order_move_rules import compute_destination_move_result, OrderMoveResult
 from Delivery_app_BK.services.domain.order.order_case_states import OrderCaseState
+from Delivery_app_BK.services.domain.order.order_states import OrderStateId
 from Delivery_app_BK.services.utils import model_requires_team, require_team_id
 
 from ...context import ServiceContext
@@ -59,6 +60,7 @@ from .plan_changes import (
     apply_order_plan_change,
     build_plan_change_apply_context,
 )
+from .order_states.update_orders_state import apply_orders_state_transition
 
 
 def _fetch_stop_eta_by_order_id(
@@ -289,6 +291,13 @@ def apply_orders_route_plan_change(
         plans_to_recompute=_plans_to_recompute,
         affected_route_groups=affected_route_groups,
         case_message=case_message,
+    )
+
+    pending_events.extend(
+        _transition_draft_orders_to_confirmed(
+            ctx=ctx,
+            changed_orders=changed_orders,
+        )
     )
     db.session.flush()
 
@@ -637,6 +646,27 @@ def _apply_move_state_heritage(
 
     for plan in plans_to_recompute.values():
         maybe_sync_plan_state_from_groups(plan)
+
+
+def _transition_draft_orders_to_confirmed(
+    *,
+    ctx: ServiceContext,
+    changed_orders: list[Order],
+) -> list[dict]:
+    draft_orders = [
+        order
+        for order in changed_orders
+        if order.order_state_id == OrderStateId.DRAFT
+    ]
+    if not draft_orders:
+        return []
+
+    _, state_transition_events = apply_orders_state_transition(
+        ctx=ctx,
+        orders=draft_orders,
+        state_id=OrderStateId.CONFIRMED,
+    )
+    return state_transition_events
 
 
 def _create_move_case(

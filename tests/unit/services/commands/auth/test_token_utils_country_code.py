@@ -6,6 +6,7 @@ from Delivery_app_BK.services.commands.auth import token_utils as module
 def test_build_auth_claims_includes_default_country_code(monkeypatch):
     user = SimpleNamespace(
         id=7,
+        client_id="user_abc123",
         username="anna",
         profile_picture=None,
         show_app_tutorial=False,
@@ -46,6 +47,7 @@ def test_build_auth_claims_includes_default_country_code(monkeypatch):
 def test_build_auth_claims_allows_missing_default_country_code(monkeypatch):
     user = SimpleNamespace(
         id=7,
+        client_id="user_abc123",
         username="anna",
         profile_picture=None,
         show_app_tutorial=False,

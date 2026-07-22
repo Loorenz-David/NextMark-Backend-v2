@@ -26,7 +26,10 @@ from Delivery_app_BK.services.commands.order.update_extensions import (
     build_order_update_extension_context,
 )
 from Delivery_app_BK.services.context import ServiceContext
-from Delivery_app_BK.services.infra.events.builders.order import build_order_edited_event
+from Delivery_app_BK.services.infra.events.builders.order import (
+    build_client_form_submitted_event,
+    build_order_edited_event,
+)
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
 
 ALLOWED_CLIENT_FIELDS = {
@@ -92,7 +95,8 @@ def submit_client_form(token: str, payload: dict) -> dict:
             build_order_edited_event(
                 order,
                 changed_sections=["client_form_submission"],
-            )
+            ),
+            build_client_form_submitted_event(order),
         ],
     )
 

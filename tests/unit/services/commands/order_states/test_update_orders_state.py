@@ -52,6 +52,31 @@ def test_update_orders_state_updates_and_emits(monkeypatch):
     assert len(emitted) == 2
 
 
+def test_apply_orders_state_transition_reuses_side_effects_without_emitting(monkeypatch):
+    state_instance = SimpleNamespace(id=4, name="Ready")
+    order = SimpleNamespace(id=11, team_id=7, order_state_id=2)
+    recomputed = []
+
+    monkeypatch.setattr(module, "get_instance", lambda ctx, model, value: state_instance)
+    monkeypatch.setattr(module, "_resolve_orders", lambda ctx, orders: [order])
+    monkeypatch.setattr(
+        module,
+        "_recompute_and_auto_complete_plans",
+        lambda changed: recomputed.extend(changed),
+    )
+
+    changed_orders, pending_events = module.apply_orders_state_transition(
+        ctx=SimpleNamespace(),
+        orders=11,
+        state_id=4,
+    )
+
+    assert changed_orders == [order]
+    assert order.order_state_id == 4
+    assert len(pending_events) == 2
+    assert recomputed == [order]
+
+
 def test_update_orders_state_skips_unchanged_without_emitting(monkeypatch):
     state_instance = SimpleNamespace(id=4, name="Ready")
     order = SimpleNamespace(id=11, team_id=7, order_state_id=4)

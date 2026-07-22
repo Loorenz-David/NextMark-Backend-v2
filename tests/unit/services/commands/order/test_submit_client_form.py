@@ -8,7 +8,7 @@ from Delivery_app_BK.services.commands.order.update_extensions.types import (
 )
 
 
-def test_submit_client_form_persists_allowed_fields_and_emits_order_edited(monkeypatch):
+def test_submit_client_form_persists_allowed_fields_and_emits_submission_events(monkeypatch):
     order = SimpleNamespace(
         id=42,
         team_id=7,
@@ -39,11 +39,17 @@ def test_submit_client_form_persists_allowed_fields_and_emits_order_edited(monke
     assert order.client_form_submitted_at is not None
     assert order.client_form_token_encrypted is None
 
-    assert len(emitted_events) == 1
+    assert len(emitted_events) == 2
     assert emitted_events[0]["order_id"] == 42
     assert emitted_events[0]["team_id"] == 7
     assert emitted_events[0]["event_name"] == OrderEvent.EDITED.value
     assert emitted_events[0]["payload"]["changed_sections"] == ["client_form_submission"]
+    assert emitted_events[1] == {
+        "order_id": 42,
+        "team_id": 7,
+        "event_name": OrderEvent.CLIENT_FORM_SUBMITTED.value,
+        "payload": {},
+    }
 
 
 def test_submit_client_form_ignores_non_allowed_payload_keys(monkeypatch):
@@ -70,7 +76,8 @@ def test_submit_client_form_ignores_non_allowed_payload_keys(monkeypatch):
 
     assert order.client_first_name == "New"
     assert not hasattr(order, "hacker_field")
-    assert len(emitted_events) == 1
+    assert len(emitted_events) == 2
+    assert emitted_events[1]["event_name"] == OrderEvent.CLIENT_FORM_SUBMITTED.value
 
 
 def test_submit_triggers_route_extension_when_address_in_payload(monkeypatch):

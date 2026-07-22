@@ -53,6 +53,15 @@ class Config:
     WEB_PUSH_VAPID_SUBJECT = os.environ.get("WEB_PUSH_VAPID_SUBJECT", "mailto:admin@nextmark.app")
 
     # ------------------------------------------------------------------
+    # Trusted devices (multi-user auth)
+    # ------------------------------------------------------------------
+    # Server-side pepper mixed into every device-secret hash. Falls back to
+    # JWT_SECRET_KEY so the feature works in dev/test without extra setup;
+    # production should set a dedicated value.
+    TRUSTED_DEVICE_SECRET_PEPPER = os.environ.get("TRUSTED_DEVICE_SECRET_PEPPER") or JWT_SECRET_KEY
+    MAX_USERS_PER_DEVICE = int(os.environ.get("MAX_USERS_PER_DEVICE", "25"))
+
+    # ------------------------------------------------------------------
     # Integrations
     # ------------------------------------------------------------------
     LOGISTIC_API_KEY = os.environ.get("LOGISTIC_API_KEY")

@@ -58,7 +58,12 @@ def create_app(config_name="development"):
         app, 
         supports_credentials=True,
         resources={r"/*": {"origins": frontend_origins}}, 
-        allow_headers=["Content-Type", "Authorization"],
+        allow_headers=[
+            "Content-Type",
+            "Authorization",
+            "X-Trusted-Device-Id",
+            "X-Trusted-Device-Secret",
+        ],
         expose_headers="*",
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
         )

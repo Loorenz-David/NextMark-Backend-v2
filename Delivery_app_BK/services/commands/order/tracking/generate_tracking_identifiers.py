@@ -7,7 +7,8 @@ Security model:
 - The raw token is embedded in the public tracking URL — never stored.
 
 Fields set on the order (mutates in-place, caller must commit):
-    tracking_number          — TRK-{order_scalar_id} if set, else TRK-{order.id}
+    tracking_number          — cleaned Shopify reference_number when available,
+                               otherwise TRK-{order_scalar_id} or TRK-{order.id}
     tracking_token_hash      — sha256(raw_token) hex digest
     tracking_link            — {TRACKING_ORDER_BASE_URL}/track/{raw_token}
     tracking_token_created_at — UTC now
@@ -26,6 +27,27 @@ TRACKING_ORDER_BASE_URL = os.environ.get(
 )
 
 
+def resolve_tracking_number(order) -> str:
+    """Resolve the customer-facing tracking number for *order*.
+
+    Shopify references are supplied as values such as ``#5001``.  They are
+    used directly after removing ``#`` characters and surrounding whitespace.
+    All other orders, and Shopify orders without a usable reference, retain
+    the internal ``TRK-<id>`` fallback format.
+    """
+    if getattr(order, "external_source", None) == "shopify":
+        reference_number = getattr(order, "reference_number", None)
+        if reference_number is not None:
+            cleaned_reference = str(reference_number).replace("#", "").strip()
+            if cleaned_reference:
+                return cleaned_reference
+
+    scalar_id = getattr(order, "order_scalar_id", None)
+    if scalar_id is None:
+        scalar_id = getattr(order, "id", None)
+    return f"TRK-{scalar_id}"
+
+
 def generate_tracking_identifiers(order) -> dict:
     """Populate tracking fields on *order* and return {"raw_token": str}.
 
@@ -37,9 +59,7 @@ def generate_tracking_identifiers(order) -> dict:
     token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
     now = datetime.now(timezone.utc)
 
-    # Prefer the human-readable scalar id; fall back to DB pk.
-    scalar_id = getattr(order, "order_scalar_id", None) or getattr(order, "id", None)
-    order.tracking_number = f"TRK-{scalar_id}"
+    order.tracking_number = resolve_tracking_number(order)
     order.tracking_token_hash = token_hash
     order.tracking_link = f"{TRACKING_ORDER_BASE_URL}/track/{raw_token}"
     order.tracking_token_created_at = now

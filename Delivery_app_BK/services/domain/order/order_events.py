@@ -16,6 +16,7 @@ class OrderEvent(str, Enum):
     DELIVERY_PLAN_CHANGED = "order_delivery_plan_changed"
     DELIVERY_RESCHEDULED = "order_rescheduled"
     CLIENT_FORM_LINK_SENT = "client_form_link_sent"
+    CLIENT_FORM_SUBMITTED = "client_form_submitted"
 
 
 class OrderEventPrintDocuments(str,Enum):

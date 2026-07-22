@@ -86,6 +86,7 @@ def _patch_create_order_dependencies(monkeypatch, requests):
         if model is module.Order:
             return SimpleNamespace(
                 id=len(dummy_session.added) + 1,
+                team_id=1,
                 client_id=fields["client_id"],
                 items=[],
                 delivery_windows=[],

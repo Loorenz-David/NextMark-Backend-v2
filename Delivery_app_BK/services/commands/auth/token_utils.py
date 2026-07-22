@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from flask_jwt_extended import create_access_token, create_refresh_token
 
-from Delivery_app_BK.models import User
+from Delivery_app_BK.models import TrustedDevice, User
 from Delivery_app_BK.services.domain.user import (
     ensure_app_workspace_state,
     parse_app_scope,
@@ -16,6 +16,7 @@ def _build_auth_claims(
     app_scope: str,
     session_scope_id: str,
     time_zone: str | None,
+    trusted_device: TrustedDevice | None = None,
 ) -> tuple[dict, dict]:
     workspace_context = ensure_app_workspace_state(user, parse_app_scope(app_scope))
     effective_time_zone = time_zone or workspace_context["team_time_zone"] or "UTC"
@@ -37,7 +38,15 @@ def _build_auth_claims(
         "default_city_key": workspace_context["default_city_key"],
     }
 
+    if trusted_device is not None:
+        claims["authentication_mode"] = "trusted_device"
+        claims["trusted_device_id"] = trusted_device.id
+        claims["trusted_device_client_id"] = trusted_device.client_id
+    else:
+        claims["authentication_mode"] = "single_user"
+
     user_object = {
+        "client_id": user.client_id,
         "username": user.username,
         "profile_picture": user.profile_picture,
         "user_role_id": workspace_context["active_role_id"],
@@ -66,6 +75,7 @@ def build_user_tokens(
     app_scope: str,
     session_scope_id: str | None = None,
     time_zone: str | None = None,
+    trusted_device: TrustedDevice | None = None,
 ) -> dict:
     identity_data = str(user.id)
     resolved_scope = parse_app_scope(app_scope)
@@ -75,6 +85,7 @@ def build_user_tokens(
         app_scope=resolved_scope,
         session_scope_id=resolved_session_scope_id,
         time_zone=time_zone,
+        trusted_device=trusted_device,
     )
 
     access_token = create_access_token(identity=identity_data, additional_claims=claims)

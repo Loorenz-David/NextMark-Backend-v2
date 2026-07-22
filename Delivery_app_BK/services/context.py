@@ -15,13 +15,25 @@ class ServiceContext():
             on_query_return = "client_ids_map",
             allow_is_system_modification = False,
             extract_fields_key = True,
-            prevent_event_bus = False
+            prevent_event_bus = False,
+            request_ip = None,
+            user_agent = None,
+            trusted_device_client_id = None,
+            trusted_device_secret = None
     ):
         self.incoming_data = incoming_data or {}
         self.incoming_file = incoming_file or None
         self.query_params = query_params or {}
         self.identity = identity or {}
         self.warnings = []
+        # Request metadata for security auditing (never logged by run_service).
+        self.request_ip = request_ip
+        self.user_agent = user_agent
+        # Trusted-device credentials, resolved from headers by the router.
+        # Kept off incoming_data/identity so the secret is never serialized
+        # into error logs.
+        self.trusted_device_client_id = trusted_device_client_id
+        self.trusted_device_secret = trusted_device_secret
         self.check_team_id = check_team_id
         self.inject_team_id = inject_team_id
         self.skip_id_instance_injection = skip_id_instance_injection 

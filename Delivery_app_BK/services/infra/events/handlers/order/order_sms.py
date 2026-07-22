@@ -51,3 +51,7 @@ def send_sms_on_order_fail(order_event) -> None:
 
 def send_sms_on_client_form_link_sent(order_event) -> None:
     run_action(order_event, "client_form_link_sent_sms", send_sms)
+
+
+def send_sms_on_client_form_submitted(order_event) -> None:
+    run_action(order_event, "client_form_submitted_sms", send_sms)

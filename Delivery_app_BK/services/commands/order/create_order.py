@@ -6,6 +6,7 @@ from sqlalchemy.exc import InvalidRequestError
 
 from Delivery_app_BK.errors import NotFound, ValidationFailed
 from Delivery_app_BK.services.infra.events.builders.order import (
+    build_client_form_submitted_event,
     build_order_created_event,
 )
 from Delivery_app_BK.models import (
@@ -162,10 +163,6 @@ def create_order(ctx: ServiceContext):
                     touched_route_plans[route_plan.id] = route_plan
             order_instances.append(order_instance)
 
-            # Auto-generate public tracking identifiers (once, on creation).
-            if order_instance.tracking_token_hash is None:
-                generate_tracking_identifiers(order_instance)
-
             if normalized_windows is not None:
                 for window in normalized_windows:
                     order_instance.delivery_windows.append(
@@ -216,6 +213,12 @@ def create_order(ctx: ServiceContext):
 
         db.session.flush()
 
+        # Generate identifiers after the initial flush so the database primary
+        # key is available if the scalar order ID is missing.
+        for order_instance in order_instances:
+            if order_instance.tracking_token_hash is None:
+                generate_tracking_identifiers(order_instance)
+
         for action in post_flush_actions:
             action()
         if post_flush_actions:
@@ -227,7 +230,7 @@ def create_order(ctx: ServiceContext):
             db.session.flush()
 
         for order_instance in order_instances:
-            pending_events.append(build_order_created_event(order_instance))
+            pending_events.extend(_build_order_creation_events(order_instance))
             bundle = {"order": serialize_created_order(order_instance)}
 
             created_items = items_by_order_client_id.get(order_instance.client_id) or []
@@ -265,6 +268,13 @@ def create_order(ctx: ServiceContext):
         if plan.id is not None
     ]
     return {"created": created_bundles, "plan_totals": plan_totals}
+
+
+def _build_order_creation_events(order_instance: Order) -> list[dict]:
+    return [
+        build_order_created_event(order_instance),
+        build_client_form_submitted_event(order_instance),
+    ]
 
 
 def _load_route_plans_by_id(

@@ -55,6 +55,15 @@ def build_order_edited_event(
     }
 
 
+def build_client_form_submitted_event(order_instance: Order) -> dict:
+    return {
+        "order_id": order_instance.id,
+        "team_id": order_instance.team_id,
+        "event_name": OrderEvent.CLIENT_FORM_SUBMITTED.value,
+        "payload": {},
+    }
+
+
 def build_delivery_window_rescheduled_by_user_event(
     order_instance: Order,
     old_earliest: datetime | None,

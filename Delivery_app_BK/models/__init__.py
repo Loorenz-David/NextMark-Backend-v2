@@ -69,3 +69,6 @@ from .tables.zones.zone import Zone
 from .tables.zones.zone_template import ZoneTemplate
 from .tables.zones.order_zone_assignment import OrderZoneAssignment
 from .tables.notifications.push_subscription import PushSubscription
+from .tables.trusted_device.trusted_device import TrustedDevice
+from .tables.trusted_device.trusted_device_user import TrustedDeviceUser
+from .tables.trusted_device.trusted_device_event import TrustedDeviceEvent

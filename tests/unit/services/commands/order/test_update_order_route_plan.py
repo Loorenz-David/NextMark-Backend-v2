@@ -1,6 +1,8 @@
 import pytest
 from types import SimpleNamespace
 
+import pytest
+
 from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.services.commands.order import update_order_route_plan as module
 
@@ -83,6 +85,115 @@ def test_apply_move_state_heritage_recomputes_group_counts(monkeypatch):
         "group_sync": 1,
         "plan_sync": 1,
     }
+
+
+def test_transition_draft_orders_to_confirmed_uses_state_service(monkeypatch):
+    draft_order = SimpleNamespace(id=1, order_state_id=module.OrderStateId.DRAFT)
+    confirmed_order = SimpleNamespace(id=2, order_state_id=module.OrderStateId.CONFIRMED)
+    ctx = SimpleNamespace()
+    calls = []
+
+    monkeypatch.setattr(
+        module,
+        "apply_orders_state_transition",
+        lambda **kwargs: (
+            calls.append(kwargs) or ([draft_order], [{"event_name": "confirmed"}])
+        ),
+    )
+
+    events = module._transition_draft_orders_to_confirmed(
+        ctx=ctx,
+        changed_orders=[draft_order, confirmed_order],
+    )
+
+    assert calls == [
+        {
+            "ctx": ctx,
+            "orders": [draft_order],
+            "state_id": module.OrderStateId.CONFIRMED,
+        }
+    ]
+    assert events == [{"event_name": "confirmed"}]
+
+
+def test_transition_draft_orders_to_confirmed_skips_orders_changed_by_heritage(monkeypatch):
+    processing_order = SimpleNamespace(id=1, order_state_id=module.OrderStateId.PROCESSING)
+    transition_called = False
+
+    def fail_if_called(**kwargs):
+        nonlocal transition_called
+        transition_called = True
+        return [], []
+
+    monkeypatch.setattr(module, "apply_orders_state_transition", fail_if_called)
+
+    assert module._transition_draft_orders_to_confirmed(
+        ctx=SimpleNamespace(),
+        changed_orders=[processing_order],
+    ) == []
+    assert transition_called is False
+
+
+def test_update_orders_route_plan_emits_events_after_transaction(monkeypatch):
+    emitted = []
+
+    class DummyTransaction:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(module.db.session, "begin", lambda: DummyTransaction())
+    monkeypatch.setattr(
+        module,
+        "apply_orders_route_plan_change",
+        lambda *args, **kwargs: {
+            "updated": [{"order": {"id": 11}}],
+            "pending_events": [{"event_name": "confirmed"}],
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "emit_order_events",
+        lambda ctx, events: emitted.extend(events),
+    )
+
+    result = module.update_orders_route_plan(
+        ctx=SimpleNamespace(),
+        order_ids=11,
+        plan_id=7,
+    )
+
+    assert result == {"updated": [{"order": {"id": 11}}]}
+    assert emitted == [{"event_name": "confirmed"}]
+
+
+def test_update_orders_route_plan_does_not_emit_when_transaction_fails(monkeypatch):
+    emitted = []
+
+    class FailingTransaction:
+        def __enter__(self):
+            raise RuntimeError("route-plan transaction failed")
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(module.db.session, "begin", lambda: FailingTransaction())
+    monkeypatch.setattr(
+        module,
+        "emit_order_events",
+        lambda ctx, events: emitted.extend(events),
+    )
+
+    with pytest.raises(RuntimeError, match="route-plan transaction failed"):
+        module.update_orders_route_plan(
+            ctx=SimpleNamespace(),
+            order_ids=11,
+            plan_id=7,
+        )
+
+    assert emitted == []
 
 
 def test_build_state_changes_bundle_serializes_route_groups_and_plans():

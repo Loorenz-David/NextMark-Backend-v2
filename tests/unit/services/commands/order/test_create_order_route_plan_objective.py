@@ -24,6 +24,19 @@ class _DummySession:
         return None
 
 
+class _IdentityAssigningSession(_DummySession):
+    def __init__(self):
+        self.instances = []
+
+    def add_all(self, instances):
+        self.instances.extend(instances)
+
+    def flush(self):
+        for instance in self.instances:
+            if getattr(instance, "id", None) is None:
+                instance.id = 42
+
+
 def _build_ctx():
     return SimpleNamespace(
         set_relationship_map=lambda *_args, **_kwargs: None,
@@ -73,6 +86,7 @@ def test_create_order_uses_route_plan_keyword_for_objective(monkeypatch):
         if model is module.Order:
             return SimpleNamespace(
                 id=1,
+                team_id=1,
                 client_id=fields["client_id"],
                 order_plan_objective=fields.get("order_plan_objective"),
                 items=[],
@@ -98,3 +112,68 @@ def test_create_order_uses_route_plan_keyword_for_objective(monkeypatch):
 
     assert captured["route_plan"] is route_plan
     assert "delivery_plan" not in captured
+
+
+def test_create_order_generates_tracking_identifiers_after_flush(monkeypatch):
+    request = OrderCreateRequest(
+        fields={"client_id": "order_1"},
+        items=[],
+        delivery_plan_id=None,
+        route_group_id=None,
+        costumer=SimpleNamespace(
+            costumer_id=4089,
+            client_id=None,
+            first_name=None,
+            last_name=None,
+            email=None,
+            primary_phone=None,
+            address=None,
+        ),
+        delivery_windows=[],
+    )
+    session = _IdentityAssigningSession()
+    captured = {}
+
+    monkeypatch.setattr(module, "db", SimpleNamespace(session=session))
+    monkeypatch.setattr(module, "extract_fields", lambda _ctx: [{"idx": 0}])
+    monkeypatch.setattr(module, "parse_create_order_request", lambda _raw: request)
+    monkeypatch.setattr(module, "_load_route_plans_by_id", lambda _ctx, _ids: {})
+    monkeypatch.setattr(
+        module,
+        "resolve_or_create_costumers",
+        lambda _ctx, _inputs: [SimpleNamespace(id=4089)],
+    )
+    monkeypatch.setattr(module, "reserve_order_scalar_ids", lambda _ctx, _count: [None])
+    monkeypatch.setattr(module, "resolve_order_delivery_windows_timezone", lambda _ctx: "UTC")
+    monkeypatch.setattr(module, "generate_tracking_identifiers", lambda order: (
+        captured.setdefault("generated_id", order.id),
+        setattr(order, "tracking_token_hash", "hash"),
+    ))
+    monkeypatch.setattr(module, "build_order_created_event", lambda _order: {})
+    monkeypatch.setattr(module, "emit_order_events", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "serialize_created_order", lambda order: {"id": order.id})
+
+    def _create_instance(_ctx, model, fields):
+        if model is module.Order:
+            return SimpleNamespace(
+                id=None,
+                team_id=1,
+                client_id=fields["client_id"],
+                order_scalar_id=fields.get("order_scalar_id"),
+                order_plan_objective=fields.get("order_plan_objective"),
+                items=[],
+                delivery_windows=[],
+                route_plan_id=None,
+                route_plan=None,
+                costumer_id=None,
+                tracking_token_hash=None,
+                items_updated_at=None,
+            )
+        raise AssertionError(f"Unexpected model: {model}")
+
+    monkeypatch.setattr(module, "create_instance", _create_instance)
+
+    result = module.create_order(_build_ctx())
+
+    assert captured["generated_id"] == 42
+    assert result["created"] == [{"order": {"id": 42}}]

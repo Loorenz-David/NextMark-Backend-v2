@@ -2,6 +2,7 @@ from Delivery_app_BK.services.domain.order.order_events import OrderEvent
 from Delivery_app_BK.services.infra.events.event_bus import EventBus
 from Delivery_app_BK.services.infra.events.handlers.order.order_email import (
     send_email_on_client_form_link_sent,
+    send_email_on_client_form_submitted,
     send_email_on_order_cancelled,
     send_email_on_order_completed,
     send_email_on_order_confirmed,
@@ -23,6 +24,7 @@ from Delivery_app_BK.services.infra.events.handlers.order.order_shopify import (
 )
 from Delivery_app_BK.services.infra.events.handlers.order.order_sms import (
     send_sms_on_client_form_link_sent,
+    send_sms_on_client_form_submitted,
     send_sms_on_order_cancelled,
     send_sms_on_order_completed,
     send_sms_on_order_confirmed,
@@ -156,4 +158,12 @@ def register_order_event_handlers(event_bus: EventBus) -> None:
     event_bus.register(
         OrderEvent.CLIENT_FORM_LINK_SENT.value,
         send_email_on_client_form_link_sent,
+    )
+    event_bus.register(
+        OrderEvent.CLIENT_FORM_SUBMITTED.value,
+        send_sms_on_client_form_submitted,
+    )
+    event_bus.register(
+        OrderEvent.CLIENT_FORM_SUBMITTED.value,
+        send_email_on_client_form_submitted,
     )

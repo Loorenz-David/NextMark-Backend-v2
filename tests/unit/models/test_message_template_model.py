@@ -2,6 +2,7 @@ import pytest
 
 from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.models.tables.content_templates.message_template import MessageTemplate
+from Delivery_app_BK.services.domain.order.order_events import OrderEvent
 
 
 def test_message_template_normalizes_legacy_footer_buttons_key():
@@ -80,3 +81,11 @@ def test_message_template_rejects_invalid_subject_payload():
 
     with pytest.raises(ValidationFailed, match="Invalid subject payload"):
         template.subject = 123
+
+
+def test_message_template_accepts_client_form_submitted_event():
+    template = MessageTemplate()
+
+    template.event = OrderEvent.CLIENT_FORM_SUBMITTED.value
+
+    assert template.event == "client_form_submitted"

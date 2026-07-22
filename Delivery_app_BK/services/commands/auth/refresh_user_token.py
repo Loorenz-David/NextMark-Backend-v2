@@ -1,5 +1,6 @@
 from Delivery_app_BK.errors import NotFound, ValidationFailed
 from Delivery_app_BK.models import User, db
+from Delivery_app_BK.services.domain.auth import resolve_refresh_trusted_device
 
 from ...context import ServiceContext
 from .token_utils import build_user_tokens
@@ -20,11 +21,17 @@ def refresh_user_token(ctx: ServiceContext):
     if not user:
         raise NotFound("User not found for refresh token.")
 
+    # For trusted-device sessions this rejects the refresh if the device was
+    # revoked/disabled or the user's assignment removed, and returns the live
+    # device so its claims persist on the new token. None for normal sessions.
+    trusted_device = resolve_refresh_trusted_device(identity)
+
     tokens = build_user_tokens(
         user,
         app_scope=app_scope,
         session_scope_id=session_scope_id,
         time_zone=identity.get("time_zone"),
+        trusted_device=trusted_device,
     )
     db.session.commit()
 
