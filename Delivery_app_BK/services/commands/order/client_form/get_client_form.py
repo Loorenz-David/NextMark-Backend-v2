@@ -5,11 +5,15 @@ Security:
 - Incoming raw token is hashed (SHA-256) before DB lookup — hash never leaks.
 - Returns only a safe subset of fields (no driver, plan, or state data).
 
-Returns: { "reference_number": str, "external_source": str, "items": [...], "team_name": str, "expires_at": str }
+Returns: { "reference_number": str, "external_source": str, "items": [...], "team_name": str,
+           "expires_at": str, "config": {...} }
 Raises: TokenInvalidError | TokenExpiredError | TokenAlreadyUsedError
 """
 
 from Delivery_app_BK.services.commands.order.client_form._validate_token import validate_and_get_order
+from Delivery_app_BK.services.queries.client_form_config.build_public_client_form_config import (
+    build_public_client_form_config,
+)
 
 
 def get_client_form_data(token: str) -> dict:
@@ -31,4 +35,6 @@ def get_client_form_data(token: str) -> dict:
         "team_timezone": team.time_zone if team is not None else None,
         "items": items,
         "expires_at": order.client_form_token_expires_at.isoformat(),
+        # Team is resolved from the token, never from a request parameter.
+        "config": build_public_client_form_config(order.team_id),
     }

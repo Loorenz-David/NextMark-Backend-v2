@@ -3,6 +3,9 @@ from ..item_state.list_item_states import list_item_states
 from ..order_states.list_order_states import list_order_states
 from ..route_plan.plan_states.list_plan_states import list_plan_states
 from ..team_members.list_team_members import list_team_members
+from ..client_form_config.get_client_form_settings import get_client_form_settings
+from ..client_form_config.list_client_form_media import list_client_form_media
+from ..client_form_config.list_client_form_rules import list_client_form_rules
 from ..content_templates.label.list_label_templates import list_label_templates_bootstrap
 from ..content_templates.messages.list_message_templates import list_message_templates_bootstrap
 from ..infrastructure.vehicle.list_vehicles import list_vehicles
@@ -124,6 +127,10 @@ def list_bootstrap(ctx: ServiceContext):
     ctx.query_params = {"channel":'sms'}
     payload['message_templates_sms'] = list_message_templates_bootstrap(ctx)['message_templates']
     payload["zones_context"] = _build_zones_context(ctx, city_key)
-    
+
+    ctx.query_params = {}
+    payload["client_form_settings"] = get_client_form_settings(ctx)["client_form_settings"]
+    payload["client_form_rules"] = list_client_form_rules(ctx)["client_form_rules"]
+    payload["client_form_media"] = list_client_form_media(ctx)["client_form_media"]
 
     return payload

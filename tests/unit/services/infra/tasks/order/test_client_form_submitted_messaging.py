@@ -31,7 +31,7 @@ def _build_action(module, *, action_id: int, order) -> SimpleNamespace:
 def _configure_email_task(monkeypatch, action, send_calls):
     monkeypatch.setattr(email_module.db.session, "get", lambda _model, _id: action)
     monkeypatch.setattr(email_module.db.session, "commit", lambda: None)
-    monkeypatch.setattr(email_module, "notify_order_event_history_changed", lambda _id: None)
+    monkeypatch.setattr(email_module, "notify_order_action_changed", lambda _action: None)
     monkeypatch.setattr(email_module, "get_existing_client_form_url", lambda _order: None)
     monkeypatch.setattr(
         email_module,
@@ -48,7 +48,7 @@ def _configure_email_task(monkeypatch, action, send_calls):
 def _configure_sms_task(monkeypatch, action, send_calls):
     monkeypatch.setattr(sms_module.db.session, "get", lambda _model, _id: action)
     monkeypatch.setattr(sms_module.db.session, "commit", lambda: None)
-    monkeypatch.setattr(sms_module, "notify_order_event_history_changed", lambda _id: None)
+    monkeypatch.setattr(sms_module, "notify_order_action_changed", lambda _action: None)
     monkeypatch.setattr(sms_module, "get_existing_client_form_url", lambda _order: None)
     monkeypatch.setattr(
         sms_module,

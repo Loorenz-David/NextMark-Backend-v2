@@ -61,12 +61,22 @@ The secret is generated with a CSPRNG, and only its **HMAC-SHA256 hash
 (peppered)** is stored. The raw secret is returned exactly once (registration
 or rotation) and must never be logged.
 
-The backend distinguishes three cases and never leaks which is which to an
+The backend distinguishes these cases and never leaks which is which to an
 unauthorized caller:
 - **no** device headers → ordinary login;
 - **invalid** device headers (bad id/secret, inactive, revoked) → generic
-  `Trusted-device authentication failed.`;
-- **valid** device headers → trusted-device flow.
+  `Trusted-device authentication failed.` (HTTP 410). No fallback — presenting
+  broken device credentials is a hard failure;
+- **valid** device headers, initiating user **assigned** → trusted-device flow;
+- **valid** device headers, initiating user **not assigned** → ordinary
+  single-user login.
+
+> **Enrollment is a capability, not a whitelist.** Registering a device does not
+> restrict who may sign in from that browser. Any user with correct credentials
+> logs in normally there; assignment is what additionally grants the multi-user
+> bundle and instant switching. This matters because the frontend attaches the
+> device headers to *every* request once enrolled — an unassigned user would
+> otherwise be permanently locked out of that installation.
 
 ---
 
@@ -83,7 +93,7 @@ Device credentials travel in headers, **not** this body.
 All responses use the standard envelope: `{ "data": <payload>, "warnings": [] }`.
 Everything below is the `data` object. **Branch on `authentication_mode`.**
 
-### 4a. Ordinary login (no valid device headers)
+### 4a. Ordinary login (no device headers, or a valid device the user isn't assigned to)
 
 ```jsonc
 {
@@ -128,8 +138,11 @@ Guarantees the frontend can rely on:
   "warnings": [ { "code": "trusted_device_users_excluded", "count": 1 } ]
   ```
   Login still succeeds.
-- Valid device + initiating user **not** assigned → generic auth failure
-  (HTTP 410). Never a silent fallback to single-user.
+- Valid device + initiating user **not** assigned → an ordinary `single_user`
+  response (§4a). Branch on `authentication_mode`: a device-enrolled client can
+  still receive `single_user` and must store it as a plain session, **not**
+  merge it into `sessionsByUserClientId`. Invalid device headers remain a hard
+  failure (HTTP 410).
 
 ### `AuthenticatedUser` (the `user` object, both modes)
 
@@ -332,6 +345,8 @@ Enforced invariants:
 - A frontend-selected user is honored only if the backend confirms the active
   device assignment; frontend-supplied ids can't bypass it.
 - Revoked devices/removed users cannot obtain new bundles or refresh.
+- An unassigned user signing in from an enrolled device gets **only their own**
+  single-user session — never another assigned user's tokens.
 
 ---
 

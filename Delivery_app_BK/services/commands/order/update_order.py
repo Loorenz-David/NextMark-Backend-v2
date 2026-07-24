@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.orm.exc import NoResultFound
 
+from Delivery_app_BK.services.domain.client_form.terms_acceptance import (
+    resolve_asserted_terms_version,
+)
 from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.models import (
     DeliveryPlan,
@@ -75,6 +78,10 @@ MUTABLE_FIELDS = {
     "marketing_messages",
     "delivery_windows",
     "order_notes",
+    "accepted_terms_version_id",
+    # Never accepted from a client — `_apply_terms_acceptance` stamps it beside a
+    # validated version id, and is the only writer. Listed so that write passes.
+    "terms_accepted_at",
 }
 
 ADDRESS_FIELDS = {"client_address"}
@@ -96,6 +103,7 @@ def update_order(ctx: ServiceContext):
     ctx.set_relationship_map({})
     targets = extract_targets(ctx)
     _validate_targets_update_fields(targets)
+    _apply_terms_acceptance(ctx, targets)
 
     updated_orders: list[Order] = []
     pending_events: list[dict[str, Any]] = []
@@ -367,6 +375,35 @@ def _validate_targets_update_fields(targets: list[dict[str, Any]]) -> None:
             raise ValidationFailed(
                 f"Target '{target_id}' contains unsupported fields for this endpoint: {unsupported_keys}"
             )
+
+
+def _apply_terms_acceptance(ctx: ServiceContext, targets: list[dict[str, Any]]) -> None:
+    """Validate any asserted terms acceptance and stamp the time it is recorded.
+
+    Reached when the in-store device fills the form for an order that already
+    exists, so the acceptance patches the order rather than being created with
+    it. The submitted version is checked against the team's active one — a staff
+    client cannot attach an arbitrary version and call it consent — and the
+    timestamp is written here rather than taken from the request.
+    """
+    for target in targets:
+        fields = target.get("fields") or {}
+        if "accepted_terms_version_id" not in fields:
+            continue
+
+        # A client must never set the timestamp itself.
+        fields.pop("terms_accepted_at", None)
+
+        accepted_terms = resolve_asserted_terms_version(
+            ctx.team_id,
+            fields.get("accepted_terms_version_id"),
+        )
+        if accepted_terms is None:
+            fields.pop("accepted_terms_version_id", None)
+            continue
+
+        fields["accepted_terms_version_id"] = accepted_terms.id
+        fields["terms_accepted_at"] = datetime.now(timezone.utc)
 
 
 def _build_mutable_fields(raw_fields: dict[str, Any]) -> dict[str, Any]:

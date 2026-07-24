@@ -36,6 +36,7 @@ ORDER_ALLOWED_FIELDS = {
     "client_address",
     "help_to_carry",
     "marketing_messages",
+    "accepted_terms_version_id",
     "delivery_windows",
     "order_state_id",
     "delivery_plan_id",
@@ -203,6 +204,15 @@ def parse_create_order_request(raw_fields: dict) -> OrderCreateRequest:
                     )
                 
             order_fields[field] = parsed_value
+
+    # Passed through unvalidated here on purpose: whether this id is the team's
+    # active version is a server-side question, and the team is not known until
+    # the command resolves it. `create_order` validates and consumes it.
+    if "accepted_terms_version_id" in raw_fields:
+        order_fields["accepted_terms_version_id"] = parse_optional_int(
+            raw_fields.get("accepted_terms_version_id"),
+            field="accepted_terms_version_id",
+        )
 
     if "client_primary_phone" in raw_fields:
         order_fields["client_primary_phone"] = parse_optional_dict(

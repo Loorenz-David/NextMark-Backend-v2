@@ -43,6 +43,7 @@ from ...domain.order.delivery_windows import (
 )
 from ...domain.order.order_scalar_id import reserve_order_scalar_ids
 from .tracking.generate_tracking_identifiers import generate_tracking_identifiers
+from ...domain.client_form.terms_acceptance import resolve_asserted_terms_version
 from Delivery_app_BK.services.domain.order.recompute_order_totals import recompute_order_totals
 from Delivery_app_BK.services.domain.plan.recompute_plan_totals import recompute_plan_totals
 
@@ -152,7 +153,19 @@ def create_order(ctx: ServiceContext):
                 resolved_route_plan_id = route_plan.id
             order_fields.pop("delivery_plan_id", None)
 
+            # The customer accepted at the counter, on the in-store device; the
+            # order recording it only exists now. Validated against the team's
+            # active version rather than trusted, then stamped with the time the
+            # order carries the acceptance from.
+            accepted_terms = resolve_asserted_terms_version(
+                ctx.team_id,
+                order_fields.pop("accepted_terms_version_id", None),
+            )
+
             order_instance: Order = create_instance(ctx, Order, order_fields)
+            if accepted_terms is not None:
+                order_instance.accepted_terms_version_id = accepted_terms.id
+                order_instance.terms_accepted_at = datetime.now(timezone.utc)
             order_instance.costumer_id = resolved_costumer.id
             if order_instance.costumer_id is None:
                 raise ValidationFailed("Order must belong to a costumer.")

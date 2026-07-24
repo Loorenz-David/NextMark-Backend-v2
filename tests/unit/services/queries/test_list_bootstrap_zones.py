@@ -10,6 +10,9 @@ def _patch_non_zone_bootstrap_dependencies(monkeypatch):
     monkeypatch.setattr(module, "list_label_templates_bootstrap", lambda _ctx: {"label_templates": []})
     monkeypatch.setattr(module, "list_vehicles", lambda _ctx: {"vehicles": []})
     monkeypatch.setattr(module, "list_message_templates_bootstrap", lambda _ctx: {"message_templates": []})
+    monkeypatch.setattr(module, "get_client_form_settings", lambda _ctx: {"client_form_settings": {}})
+    monkeypatch.setattr(module, "list_client_form_rules", lambda _ctx: {"client_form_rules": []})
+    monkeypatch.setattr(module, "list_client_form_media", lambda _ctx: {"client_form_media": []})
 
 
 def test_list_bootstrap_zones_uses_explicit_city_key_override(monkeypatch):

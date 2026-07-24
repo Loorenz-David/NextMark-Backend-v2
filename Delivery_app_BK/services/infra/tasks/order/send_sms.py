@@ -6,7 +6,7 @@ from typing import Any
 from Delivery_app_BK.models import OrderEventAction, db
 from Delivery_app_BK.services.commands.order.client_form.generate_token import get_existing_client_form_url
 from Delivery_app_BK.services.domain.messaging import SCHEDULE_ANCHOR_FUTURE_BUSINESS_TIME
-from Delivery_app_BK.services.infra.events.realtime_refresh import notify_order_event_history_changed
+from Delivery_app_BK.services.infra.events.realtime_refresh import notify_order_action_changed
 from Delivery_app_BK.services.infra.messaging import MessageRenderContext
 from Delivery_app_BK.services.infra.messaging import resolve_sms_template
 from Delivery_app_BK.services.infra.messaging.action_scheduling import resolve_current_order_future_anchor
@@ -23,7 +23,7 @@ def _mark_action_failed(action: OrderEventAction, error_message: str) -> None:
     action.status = OrderEventAction.STATUS_FAILED
     action.last_error = _truncate_error(error_message)
     db.session.commit()
-    notify_order_event_history_changed(action.event_id)
+    notify_order_action_changed(action)
 
 
 def _mark_action_success(action: OrderEventAction) -> None:
@@ -31,7 +31,7 @@ def _mark_action_success(action: OrderEventAction) -> None:
     action.last_error = None
     action.processed_at = datetime.now(timezone.utc)
     db.session.commit()
-    notify_order_event_history_changed(action.event_id)
+    notify_order_action_changed(action)
 
 
 def _mark_action_skipped(action: OrderEventAction, reason: str) -> None:
@@ -39,7 +39,7 @@ def _mark_action_skipped(action: OrderEventAction, reason: str) -> None:
     action.last_error = _truncate_error(reason)
     action.processed_at = datetime.now(timezone.utc)
     db.session.commit()
-    notify_order_event_history_changed(action.event_id)
+    notify_order_action_changed(action)
 
 
 def _extract_phone_value(source: Any) -> str | None:
@@ -111,6 +111,20 @@ def _resolve_recipient_phone(order) -> str | None:
     return None
 
 
+def _resolve_template_event_name(action: OrderEventAction) -> str:
+    """
+    Manual sends carry the template's business event in the action payload,
+    because their own event is the generic manual message event. Automatic
+    actions have no payload and fall back to the event they belong to.
+    """
+    payload = getattr(action, "payload", None)
+    if isinstance(payload, dict):
+        template_event = payload.get("template_event")
+        if isinstance(template_event, str) and template_event.strip():
+            return template_event.strip()
+    return action.event.event_name
+
+
 def _extract_sms_override(action: OrderEventAction) -> str | None:
     event_payload = getattr(action.event, "payload", None)
     if not isinstance(event_payload, dict):
@@ -147,7 +161,8 @@ def send_sms(action_id: int) -> None:
             _mark_action_failed(action, "Missing team context for SMS send")
             return
 
-        template = resolve_sms_template(team_id=team_id, channel="sms", event_name=action.event.event_name)
+        template_event_name = _resolve_template_event_name(action)
+        template = resolve_sms_template(team_id=team_id, channel="sms", event_name=template_event_name)
         if template is None or not bool(template.enable):
             _mark_action_skipped(action, "SMS template is missing or disabled at execution time")
             return
@@ -183,7 +198,7 @@ def send_sms(action_id: int) -> None:
         send_sms_message(
             team_id=team_id,
             recipient_phone=recipient_phone,
-            event_name=action.event.event_name,
+            event_name=template_event_name,
             render_context=render_context,
         )
         _mark_action_success(action)

@@ -14,6 +14,7 @@ def _load_blueprints():
     from .auth import auth_bp
     from .bootstrap import bootstrap_bp
     from .client_form import client_form_bp, public_client_form_bp, public_client_form_root_bp
+    from .client_form_config import client_form_config_bp
     from .costumer import costumer_bp
     from .route_plan.local_delivery_plans import route_groups_bp as local_delivery_plans_bp
     from .route_plan.plan import route_plans_bp as plan_bp
@@ -37,6 +38,7 @@ def _load_blueprints():
     from .order import order_bp
     from .order_assignment import order_assignment_bp
     from .order_case import order_case_bp
+    from .order_messaging import order_messaging_bp
     from .order_tracking import public_order_tracking_bp, public_order_tracking_root_bp
     from .seed import seed_bp
     from .team_invitation import team_invitation_bp
@@ -60,6 +62,7 @@ def _load_blueprints():
         local_delivery_plans_bp,
         order_bp,
         order_assignment_bp,
+        order_messaging_bp,
         infrastructure_bp,
         external_integration_bp,
         user_role_bp,
@@ -77,6 +80,7 @@ def _load_blueprints():
         plan_overviews_bp,
         costumer_bp,
         client_form_bp,
+        client_form_config_bp,
         ai_bp,
         zone_bp,
         notifications_bp,
@@ -102,6 +106,7 @@ def _load_blueprints():
             "plan_bp": plan_bp,
             "order_bp": order_bp,
             "order_assignment_bp": order_assignment_bp,
+            "order_messaging_bp": order_messaging_bp,
             "infrastructure_bp": infrastructure_bp,
             "external_integration_bp": external_integration_bp,
             "order_case_bp": order_case_bp,
@@ -124,6 +129,7 @@ def _load_blueprints():
             "costumer_bp": costumer_bp,
             "drivers_bp": drivers_bp,
             "client_form_bp": client_form_bp,
+            "client_form_config_bp": client_form_config_bp,
             "ai_bp": ai_bp,
             "zone_bp": zone_bp,
             "notifications_bp": notifications_bp,
@@ -157,6 +163,7 @@ def register_v2_blueprints(app):
     app.register_blueprint(bp["plan_bp"], url_prefix="/api_v2/route_plans")
     app.register_blueprint(bp["order_bp"], url_prefix="/api_v2/orders")
     app.register_blueprint(bp["order_assignment_bp"], url_prefix="/api_v2/order_assignments")
+    app.register_blueprint(bp["order_messaging_bp"], url_prefix="/api_v2/order_messages")
     app.register_blueprint(bp["infrastructure_bp"], url_prefix="/api_v2/infrastructures")
     app.register_blueprint(bp["external_integration_bp"], url_prefix="/api_v2/external_integrations")
     app.register_blueprint(bp["order_case_bp"], url_prefix="/api_v2/order_cases")
@@ -179,6 +186,7 @@ def register_v2_blueprints(app):
     app.register_blueprint(bp["costumer_bp"], url_prefix="/api_v2/costumers")
     app.register_blueprint(bp["drivers_bp"], url_prefix="/api_v2/drivers")
     app.register_blueprint(bp["client_form_bp"], url_prefix="/api_v2")
+    app.register_blueprint(bp["client_form_config_bp"], url_prefix="/api_v2/client_form_config")
     app.register_blueprint(bp["public_client_form_bp"], url_prefix="/api_v2")
     app.register_blueprint(bp["public_client_form_root_bp"])
     app.register_blueprint(bp["public_order_tracking_bp"], url_prefix="/api_v2")

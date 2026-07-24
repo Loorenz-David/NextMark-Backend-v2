@@ -1,11 +1,22 @@
 from types import SimpleNamespace
 
+import pytest
+
 from Delivery_app_BK.services.commands.order.client_form import submit_client_form as module
 from Delivery_app_BK.services.domain.order.order_events import OrderEvent
 from Delivery_app_BK.services.commands.order.update_extensions.types import (
     OrderUpdateChangeFlags,
     OrderUpdateExtensionResult,
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_terms_configured(monkeypatch):
+    """Default for these tests: the team collects no terms acceptance.
+
+    Terms acceptance is covered separately in test_submit_client_form_terms.py.
+    """
+    monkeypatch.setattr(module, "resolve_terms_acceptance", lambda team_id, payload: None)
 
 
 def test_submit_client_form_persists_allowed_fields_and_emits_submission_events(monkeypatch):

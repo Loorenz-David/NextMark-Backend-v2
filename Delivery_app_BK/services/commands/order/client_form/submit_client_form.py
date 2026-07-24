@@ -4,6 +4,8 @@ Accept and persist the client-submitted info for an order.
 Security:
 - Token is hashed before lookup — raw token is never stored.
 - Payload is strictly filtered to ALLOWED_CLIENT_FIELDS; any other keys are silently dropped.
+- `accepted_terms_version_id` is deliberately outside that set — it is validated
+  against the team's active terms version before being written.
 - Token is invalidated immediately on successful write (single-use).
 
 Side effects:
@@ -18,6 +20,9 @@ from datetime import datetime, timezone
 
 from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.models import db
+from Delivery_app_BK.services.commands.order.client_form._resolve_terms_acceptance import (
+    resolve_terms_acceptance,
+)
 from Delivery_app_BK.services.commands.order.client_form._validate_token import validate_and_get_order
 from Delivery_app_BK.services.commands.order.update_extensions import (
     OrderUpdateChangeFlags,
@@ -39,12 +44,16 @@ ALLOWED_CLIENT_FIELDS = {
     "client_primary_phone",
     "client_secondary_phone",
     "client_address",
+    "marketing_messages"
 }
 
 
 def submit_client_form(token: str, payload: dict) -> dict:
     order = validate_and_get_order(token)
     note_payload = payload.get("order_notes") if isinstance(payload, dict) else None
+
+    # Validated against the team's active version before anything is written.
+    accepted_terms = resolve_terms_acceptance(order.team_id, payload)
 
     # Sanitize — only write allowed fields
     safe_payload = {k: v for k, v in payload.items() if k in ALLOWED_CLIENT_FIELDS}
@@ -65,8 +74,14 @@ def submit_client_form(token: str, payload: dict) -> dict:
         current_notes.append(note_payload)
         order.order_notes = current_notes
 
-    order.client_form_submitted_at = datetime.now(timezone.utc)
+    submitted_at = datetime.now(timezone.utc)
+    order.client_form_submitted_at = submitted_at
     order.client_form_token_encrypted = None
+
+    if accepted_terms is not None:
+        order.accepted_terms_version_id = accepted_terms.id
+        order.terms_accepted_at = submitted_at
+
     db.session.commit()
 
     # If the customer updated the delivery address, recompute downstream stop ETAs

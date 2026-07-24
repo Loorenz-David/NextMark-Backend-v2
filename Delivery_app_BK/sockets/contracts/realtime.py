@@ -55,6 +55,11 @@ BUSINESS_EVENT_ORDER_CASE_UPDATED = "order_case.updated"
 BUSINESS_EVENT_ORDER_CASE_STATE_CHANGED = "order_case.state_changed"
 BUSINESS_EVENT_ORDER_CHAT_MESSAGE_CREATED = "order_chat.message_created"
 
+# Manual order messaging: one dispatched frame per send request, then one
+# updated frame per action reaching a terminal status.
+BUSINESS_EVENT_ORDER_MESSAGE_DISPATCHED = "order_message.dispatched"
+BUSINESS_EVENT_ORDER_MESSAGE_UPDATED = "order_message.updated"
+
 # Route Plan Events
 BUSINESS_EVENT_ROUTE_PLAN_UPDATED = "route_plan.updated"
 

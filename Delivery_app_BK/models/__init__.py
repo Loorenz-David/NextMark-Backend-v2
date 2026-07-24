@@ -72,3 +72,7 @@ from .tables.notifications.push_subscription import PushSubscription
 from .tables.trusted_device.trusted_device import TrustedDevice
 from .tables.trusted_device.trusted_device_user import TrustedDeviceUser
 from .tables.trusted_device.trusted_device_event import TrustedDeviceEvent
+from .tables.client_form.client_form_settings import ClientFormSettings
+from .tables.client_form.client_form_terms_version import ClientFormTermsVersion
+from .tables.client_form.client_form_rule import ClientFormRule
+from .tables.client_form.client_form_media import ClientFormMedia

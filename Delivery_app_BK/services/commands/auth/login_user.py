@@ -27,9 +27,15 @@ def login_user_service( ctx:ServiceContext ):
     if not user.check_password( login_request.password ):
         raise ValidationFailed( "Incorrect login information." )
 
+    # Raises on invalid/revoked device credentials; None when none were sent.
     trusted_device = resolve_trusted_device(ctx)
 
-    if trusted_device is None:
+    # Device enrollment is an added capability, not a whitelist: a user who is
+    # not assigned to the device still signs in normally from it, receiving only
+    # their own tokens and never the multi-user bundle.
+    if trusted_device is None or not is_user_assigned_to_device(
+        user.id, trusted_device.id
+    ):
         tokens = build_user_tokens(
             user,
             app_scope=login_request.app_scope,
@@ -40,11 +46,6 @@ def login_user_service( ctx:ServiceContext ):
             "authentication_mode": "single_user",
             **tokens,
         }
-
-    # Valid trusted-device credentials were presented: the initiating user
-    # must be assigned to it. Never fall back silently to a normal login.
-    if not is_user_assigned_to_device(user.id, trusted_device.id):
-        raise ValidationFailed("Trusted-device authentication failed.")
 
     payload = build_trusted_device_sessions(
         ctx,

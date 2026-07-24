@@ -110,6 +110,15 @@ class Order(
     client_form_token_expires_at = Column(UTCDateTime, nullable=True)
     client_form_submitted_at = Column(UTCDateTime, nullable=True)
 
+    # Terms accepted at client-form submission. The FK points at an immutable
+    # version row, so the exact accepted text stays recoverable.
+    accepted_terms_version_id = Column(
+        Integer,
+        ForeignKey("client_form_terms_version.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    terms_accepted_at = Column(UTCDateTime, nullable=True)
+
     # Order notes: list of string notes attached to the order
     order_notes = Column(JSONB().with_variant(JSON, "sqlite"), nullable=True)
 
