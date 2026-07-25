@@ -12,6 +12,7 @@ from Delivery_app_BK.services.domain.client_form.terms_acceptance import (
 )
 from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.models import (
+    ClientFormTermsVersion,
     Costumer,
     DeliveryPlan,
     Order,
@@ -104,7 +105,12 @@ DETAIL_FIELDS = MUTABLE_FIELDS.difference(WINDOW_FIELDS)
 
 
 def update_order(ctx: ServiceContext):
-    ctx.set_relationship_map({})
+    # `accepted_terms_version_id` is an FK without a mapped relationship on
+    # Order, so field injection cannot resolve its target model on its own.
+    # Reached when the in-store device patches an existing order: by this point
+    # `_apply_terms_acceptance` has already replaced the asserted id with the
+    # team's validated version id.
+    ctx.set_relationship_map({"accepted_terms_version_id": ClientFormTermsVersion})
     targets = extract_targets(ctx)
     _extract_costumer_update_flags(targets)
     _validate_targets_update_fields(targets)

@@ -14,6 +14,6 @@ with app.app_context():
 
 """
 
-.venv/bin/python beyo-data-transfer/importer.py --team-id 1 --driver-id 1
+.venv/bin/python beyo-data-transfer/importer.py --team-id 1 --driver-id 1 --apply
 
 """

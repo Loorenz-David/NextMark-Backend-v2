@@ -5,6 +5,7 @@ from Delivery_app_BK.sockets.contracts.realtime import (
     CLIENT_EVENT_EXTERNAL_FORM_JOIN_USER,
     CLIENT_EVENT_EXTERNAL_FORM_LEAVE_USER,
     CLIENT_EVENT_NOTIFICATION_MARK_READ,
+    CLIENT_EVENT_EXTERNAL_FORM_PROGRESS_USER,
     CLIENT_EVENT_EXTERNAL_FORM_REQUEST_USER,
     CLIENT_EVENT_EXTERNAL_FORM_SUBMIT_USER,
     CLIENT_EVENT_SUBSCRIBE,
@@ -13,6 +14,7 @@ from Delivery_app_BK.sockets.contracts.realtime import (
 from Delivery_app_BK.sockets.handlers.external_form import (
     handle_external_form_join_user,
     handle_external_form_leave_user,
+    handle_external_form_progress_user,
     handle_external_form_request_user,
     handle_external_form_submit_user,
 )
@@ -38,4 +40,5 @@ def register_socket_handlers() -> None:
     socketio.on_event(CLIENT_EVENT_EXTERNAL_FORM_LEAVE_USER, handle_external_form_leave_user)
     socketio.on_event(CLIENT_EVENT_EXTERNAL_FORM_SUBMIT_USER, handle_external_form_submit_user)
     socketio.on_event(CLIENT_EVENT_EXTERNAL_FORM_REQUEST_USER, handle_external_form_request_user)
+    socketio.on_event(CLIENT_EVENT_EXTERNAL_FORM_PROGRESS_USER, handle_external_form_progress_user)
     _registered = True

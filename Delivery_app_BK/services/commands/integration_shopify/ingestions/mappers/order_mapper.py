@@ -42,32 +42,34 @@ def _build_address_object( address:dict | None ):
 
     return None
 
-def _build_phone_object(phone: str | None):
+def _build_phone_object(phone: str | None, region: str | None = None):
     if not isinstance(phone, str):
         return None
 
-    phone = phone.strip()
-    if not phone:
+    normalized = phone.strip()
+    if not normalized:
         return None
 
-    try:
-        # Parse number (None = assume number includes country code like +46)
-        parsed_number = phonenumbers.parse(phone, None)
+    # Shopify addresses frequently carry national-format numbers ("070-123 45 67")
+    # with no country code. Parsing those with region=None raises, so try the
+    # address's own country_code first, then E.164, then the SE default.
+    regions: list[str | None] = []
+    for candidate in (region, None, "SE"):
+        if candidate not in regions:
+            regions.append(candidate)
 
-        # Validate number
-        if not phonenumbers.is_valid_number(parsed_number):
-            return None
+    for reg in regions:
+        try:
+            parsed_number = phonenumbers.parse(normalized, reg)
+        except NumberParseException:
+            continue
+        if phonenumbers.is_valid_number(parsed_number):
+            return {
+                "prefix": f"+{parsed_number.country_code}",
+                "number": str(parsed_number.national_number),
+            }
 
-        country_code = parsed_number.country_code
-        national_number = parsed_number.national_number
-
-        return {
-            "prefix": f"+{country_code}",
-            "number": str(national_number)
-        }
-
-    except NumberParseException:
-        return None
+    return None
 
 def _extract_client_fields(shipping_info: dict | None) :
     shipping_info_obj = {}
@@ -78,7 +80,10 @@ def _extract_client_fields(shipping_info: dict | None) :
         if shipping_info.get("last_name"):
             shipping_info_obj["client_last_name"] = shipping_info.get("last_name")
 
-        phone_obj = _build_phone_object(shipping_info.get("phone"))
+        phone_obj = _build_phone_object(
+            shipping_info.get("phone"),
+            region=shipping_info.get("country_code"),
+        )
         if phone_obj:
             shipping_info_obj["client_primary_phone"] = phone_obj
 
@@ -102,10 +107,14 @@ def order_mapper(shopify_order):
         "external_order_id": str(shopify_order.get("id")),
         "external_source": "shopify",
         "client_email":shopify_order.get("contact_email", shopify_order.get("email")),
-        "client_primary_phone":_build_phone_object(shopify_order.get("phone")),
+        "client_primary_phone":_build_phone_object(
+            shopify_order.get("phone"),
+            region=_resolve_order_region(shopify_order),
+        ),
     }
 
     from_shipping_address = _extract_client_fields( shopify_order.get("shipping_address") )
+    from_billing_address = _extract_client_fields( shopify_order.get("billing_address") )
     from_customer_address = {}
     from_customer = {}
 
@@ -113,13 +122,23 @@ def order_mapper(shopify_order):
     if customer:
         from_customer = _extract_client_fields( customer )
         from_customer_address = _extract_client_fields(customer.get("default_address"))
-        
-    
+
+    # Precedence (last wins): shipping_address > billing_address >
+    # customer.default_address > customer > order-level base fields.
     order_object = {
-        **order_object, 
-        **from_customer, 
+        **order_object,
+        **from_customer,
         **from_customer_address,
-        **from_shipping_address
+        **from_billing_address,
+        **from_shipping_address,
         }
-    
+
     return order_object
+
+
+def _resolve_order_region(shopify_order: dict) -> str | None:
+    for key in ("shipping_address", "billing_address"):
+        section = shopify_order.get(key)
+        if isinstance(section, dict) and section.get("country_code"):
+            return section.get("country_code")
+    return None

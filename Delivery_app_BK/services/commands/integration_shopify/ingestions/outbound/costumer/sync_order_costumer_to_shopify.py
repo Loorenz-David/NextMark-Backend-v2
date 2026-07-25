@@ -64,6 +64,20 @@ mutation customerEmailMarketingConsentUpdate($input: CustomerEmailMarketingConse
 }
 """
 
+ORDER_UPDATE_SHIPPING_ADDRESS_MUTATION = """
+mutation orderUpdate($input: OrderInput!) {
+  orderUpdate(input: $input) {
+    order {
+      id
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+"""
+
 
 def sync_order_costumer_to_shopify(order_id: int) -> None:
     order = (
@@ -130,6 +144,7 @@ def sync_order_costumer_to_shopify(order_id: int) -> None:
     logger.info(
         "[shopify-costumer-sync] sync: orderCustomerSet OK order_id=%s", order_id
     )
+    _sync_order_shipping_address(order, integration)
 
     costumer = order.costumer
     if costumer is not None:
@@ -246,6 +261,60 @@ def _assign_shopify_customer_to_order(
             "customerId": customer_gid,
         },
     )
+
+
+def _sync_order_shipping_address(order: Order, integration: ShopifyIntegration) -> None:
+    """Align the Shopify order's shippingAddress with the order's client_* fields.
+
+    Cosmetic and NON-FATAL: a fulfilled / closed / otherwise uneditable order will
+    make Shopify reject the edit, so any error here is logged and swallowed rather
+    than aborting the customer sync (which already succeeded by this point).
+    """
+    costumer = order.costumer
+    first_name = _pick_first_non_empty(
+        getattr(order, "client_first_name", None),
+        getattr(costumer, "first_name", None),
+        "Shopify",
+    )
+    last_name = _pick_first_non_empty(
+        getattr(order, "client_last_name", None),
+        getattr(costumer, "last_name", None),
+        "Customer",
+    )
+    phone = _build_phone_string(
+        getattr(order, "client_primary_phone", None)
+        or _extract_default_phone(costumer)
+    )
+    shipping_address = _build_mailing_address(order, costumer, phone, first_name, last_name)
+    if not shipping_address:
+        logger.info(
+            "[shopify-costumer-sync] shipping: no address to sync order_id=%s",
+            getattr(order, "id", None),
+        )
+        return
+
+    variables = {
+        "input": {
+            "id": _to_shopify_gid("Order", getattr(order, "external_order_id", None)),
+            "shippingAddress": shipping_address,
+        }
+    }
+    try:
+        _post_shopify_graphql(
+            integration=integration,
+            query=ORDER_UPDATE_SHIPPING_ADDRESS_MUTATION,
+            variables=variables,
+        )
+        logger.info(
+            "[shopify-costumer-sync] shipping: orderUpdate OK order_id=%s",
+            getattr(order, "id", None),
+        )
+    except Exception:
+        logger.warning(
+            "[shopify-costumer-sync] shipping: orderUpdate skipped/failed (non-fatal) order_id=%s",
+            getattr(order, "id", None),
+            exc_info=True,
+        )
 
 
 def _resolve_customer_email(order: Order, costumer: Costumer | None) -> str | None:

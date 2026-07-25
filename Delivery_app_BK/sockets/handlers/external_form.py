@@ -4,6 +4,7 @@ from flask_socketio import join_room, leave_room
 from Delivery_app_BK.socketio_instance import socketio
 from Delivery_app_BK.sockets.connection.auth import authenticated_socket_event
 from Delivery_app_BK.sockets.contracts.realtime import (
+    SERVER_EVENT_EXTERNAL_FORM_PROGRESS,
     SERVER_EVENT_EXTERNAL_FORM_RECEIVED,
     SERVER_EVENT_EXTERNAL_FORM_REQUESTED,
 )
@@ -47,6 +48,27 @@ def handle_external_form_submit_user(claims, data):
         {
             "form_data": form_data,
             "submitted_by": claims.get("user_id"),
+        },
+        room=build_external_form_room(team_id),
+        skip_sid=request.sid,
+    )
+
+
+@authenticated_socket_event
+def handle_external_form_progress_user(claims, data):
+    # In-progress snapshot of the form being filled on the linked device.
+    # Relayed opaquely like form_data: the frontend owns the progress_data
+    # shape (form_data + step + seq + session).
+    team_id = _team_id(claims)
+    progress_data = (data or {}).get("progress_data")
+    if team_id is None or not progress_data:
+        return
+
+    socketio.emit(
+        SERVER_EVENT_EXTERNAL_FORM_PROGRESS,
+        {
+            "progress_data": progress_data,
+            "progressed_by": claims.get("user_id"),
         },
         room=build_external_form_room(team_id),
         skip_sid=request.sid,

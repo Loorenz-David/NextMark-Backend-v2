@@ -22,6 +22,9 @@ CHAIR_QUANTITY_METAFIELD_KEYS = {
     "chair_set_size",
     "quantity",
 }
+ITEM_LOCATION_METAFIELD_KEYS = {
+    "item_location",
+}
 
 
 @dataclass(frozen=True)
@@ -262,6 +265,24 @@ def apply_shopify_line_item_media(
 def _matches_chair_item_type(mapped_item: dict[str, Any], _line_item: dict[str, Any]) -> bool:
     item_type = mapped_item.get("item_type")
     return isinstance(item_type, str) and "chair" in item_type.lower()
+
+
+def _matches_all_items(_mapped_item: dict[str, Any], _line_item: dict[str, Any]) -> bool:
+    return True
+
+
+def _apply_item_position_from_metafields(
+    mapped_item: dict[str, Any],
+    line_item: dict[str, Any],
+    resolver: ShopifyMetafieldResolver,
+) -> dict[str, Any]:
+    metafields = resolver.get_line_item_metafields(line_item)
+    for key in ITEM_LOCATION_METAFIELD_KEYS:
+        value = metafields.get(key)
+        if isinstance(value, str) and value.strip():
+            mapped_item["item_position"] = value.strip()
+            break
+    return mapped_item
 
 
 ShopifyLineItemImageResolver = ShopifyLineItemMediaResolver
@@ -538,5 +559,10 @@ ITEM_ENRICHMENT_RULES: tuple[ItemEnrichmentRule, ...] = (
         name="chair_quantity_from_metafields",
         matches=_matches_chair_item_type,
         apply=_apply_chair_quantity_from_metafields,
+    ),
+    ItemEnrichmentRule(
+        name="item_position_from_metafields",
+        matches=_matches_all_items,
+        apply=_apply_item_position_from_metafields,
     ),
 )
