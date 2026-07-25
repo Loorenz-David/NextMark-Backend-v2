@@ -19,4 +19,5 @@ from .order_shopify import sync_shopify_fulfillment_on_order_completed
 from .order_shopify import (
     notify_schedule_targets_on_delivery_rescheduled,
     notify_schedule_targets_on_order_created,
+    sync_shopify_costumer_on_client_form_submitted,
 )

@@ -41,3 +41,39 @@ def process_shopify_order_webhook_job(event_id: int, shop: str, payload: dict) -
             payload.get("id") if isinstance(payload, dict) else None,
         )
         raise
+
+
+@with_app_context
+def process_shopify_customer_webhook_job(event_id: int, shop: str, payload: dict) -> None:
+    from Delivery_app_BK.models import ShopifyWebhookEvents
+    from Delivery_app_BK.services.commands.integration_shopify.webhooks import (
+        webhook_event_completed,
+        webhook_event_failed,
+    )
+    from Delivery_app_BK.services.commands.integration_shopify.ingestions.inbound import (
+        apply_shopify_customer_update,
+    )
+
+    event = ShopifyWebhookEvents.query.get(event_id)
+    if event is None:
+        logger.error("process_shopify_customer_webhook_job: event_id=%s not found", event_id)
+        return
+
+    try:
+        apply_shopify_customer_update(shop=shop, payload=payload)
+        webhook_event_completed(event)
+        logger.info(
+            "Shopify customer webhook processed successfully | event_id=%s shop=%s customer_id=%s",
+            event_id,
+            shop,
+            payload.get("id") if isinstance(payload, dict) else None,
+        )
+    except Exception:
+        webhook_event_failed(event)
+        logger.exception(
+            "Shopify customer webhook processing failed | event_id=%s shop=%s customer_id=%s",
+            event_id,
+            shop,
+            payload.get("id") if isinstance(payload, dict) else None,
+        )
+        raise

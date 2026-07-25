@@ -1,3 +1,5 @@
+import logging
+
 from Delivery_app_BK.models import Order, OrderScheduleTarget, RoutePlan, db
 from Delivery_app_BK.services.domain.order.shopify import (
     is_shopify_order,
@@ -15,6 +17,10 @@ from Delivery_app_BK.services.infra.tasks.order.notify_order_schedule_action imp
 from Delivery_app_BK.services.infra.tasks.order.push_external_schedule_action import (
     push_external_schedule_action,
 )
+from Delivery_app_BK.services.infra.tasks.order.sync_shopify import sync_shopify
+
+
+logger = logging.getLogger(__name__)
 
 
 def sync_shopify_fulfillment_on_order_completed(order_event) -> None:
@@ -31,6 +37,44 @@ def sync_shopify_fulfillment_on_order_completed(order_event) -> None:
         fn=fulfill_shopify_order,
         args=(order.id,),
         description=f"fulfill-shopify-order:{order.id}",
+    )
+
+
+def sync_shopify_costumer_on_client_form_submitted(order_event) -> None:
+    event_order_id = getattr(order_event, "order_id", None)
+    logger.info(
+        "[shopify-costumer-sync] handler fired event_name=%s order_id=%s",
+        getattr(order_event, "event_name", None),
+        event_order_id,
+    )
+    order = getattr(order_event, "order", None)
+    if order is None:
+        order = db.session.get(Order, event_order_id)
+    if order is None:
+        logger.warning(
+            "[shopify-costumer-sync] handler: order not found order_id=%s",
+            event_order_id,
+        )
+        return
+    if not is_shopify_order(order):
+        logger.info(
+            "[shopify-costumer-sync] handler: not a shopify order, skip "
+            "order_id=%s external_source=%s external_order_id=%s",
+            order.id,
+            getattr(order, "external_source", None),
+            getattr(order, "external_order_id", None),
+        )
+        return
+
+    logger.info(
+        "[shopify-costumer-sync] handler: enqueue sync_shopify order_id=%s",
+        order.id,
+    )
+    enqueue_job(
+        queue_key="default",
+        fn=sync_shopify,
+        args=(order.id,),
+        description=f"sync-shopify-costumer:{order.id}",
     )
 
 

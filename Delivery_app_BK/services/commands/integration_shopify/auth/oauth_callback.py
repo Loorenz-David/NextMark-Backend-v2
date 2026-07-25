@@ -126,6 +126,12 @@ def handle_shopify_oauth_callback(ctx: ServiceContext, params):
         address=f"{BACKEND_PUBLIC_URL}/webhooks/shopify/orders"
     )
     create_shopify_webhook(
+        shop=shop,
+        access_token=access_token,
+        topic="customers/update",
+        address=f"{BACKEND_PUBLIC_URL}/webhooks/shopify/customers"
+    )
+    create_shopify_webhook(
     shop=shop,
     access_token=access_token,
     topic="app/uninstalled",

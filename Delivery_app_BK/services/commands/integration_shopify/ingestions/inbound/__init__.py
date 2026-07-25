@@ -1,1 +1,2 @@
 from .create_internal_order import create_internal_order
+from .apply_customer_update import apply_shopify_customer_update

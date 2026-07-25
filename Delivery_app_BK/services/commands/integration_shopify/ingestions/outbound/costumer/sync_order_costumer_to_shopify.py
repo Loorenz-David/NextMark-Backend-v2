@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
+import phonenumbers
 import requests
 from sqlalchemy.orm import selectinload
 
 from Delivery_app_BK.models import Costumer, Order, ShopifyIntegration, db
 from Delivery_app_BK.services.domain.order.shopify import (
     SHOPIFY_EXTERNAL_SOURCE,
+    is_shopify_order,
     should_sync_shopify_order_costumer,
 )
 
@@ -47,6 +50,20 @@ mutation orderCustomerSet($orderId: ID!, $customerId: ID!) {
 }
 """
 
+CUSTOMER_EMAIL_MARKETING_CONSENT_UPDATE_MUTATION = """
+mutation customerEmailMarketingConsentUpdate($input: CustomerEmailMarketingConsentUpdateInput!) {
+  customerEmailMarketingConsentUpdate(input: $input) {
+    customer {
+      id
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
+"""
+
 
 def sync_order_costumer_to_shopify(order_id: int) -> None:
     order = (
@@ -59,9 +76,30 @@ def sync_order_costumer_to_shopify(order_id: int) -> None:
         .first()
     )
     if order is None:
+        logger.warning("[shopify-costumer-sync] sync: order not found order_id=%s", order_id)
         return
 
+    _costumer = order.costumer
+    logger.info(
+        "[shopify-costumer-sync] sync: loaded order_id=%s external_source=%s "
+        "external_order_id=%s costumer_id=%s costumer_external_source=%s "
+        "costumer_external_costumer_id=%s",
+        order_id,
+        getattr(order, "external_source", None),
+        getattr(order, "external_order_id", None),
+        getattr(_costumer, "id", None),
+        getattr(_costumer, "external_source", None),
+        getattr(_costumer, "external_costumer_id", None),
+    )
+
     if not should_sync_shopify_order_costumer(order, _build_submitted_fields_snapshot(order)):
+        logger.warning(
+            "[shopify-costumer-sync] sync: SKIPPED by guard order_id=%s "
+            "(is_shopify_order=%s costumer_present=%s)",
+            order_id,
+            is_shopify_order(order),
+            _costumer is not None,
+        )
         return
 
     integration = (
@@ -73,8 +111,25 @@ def sync_order_costumer_to_shopify(order_id: int) -> None:
     if integration is None:
         raise RuntimeError(f"No Shopify integration found for team {order.team_id}.")
 
+    logger.info(
+        "[shopify-costumer-sync] sync: integration found id=%s shop=%s scopes=%s order_id=%s",
+        integration.id,
+        integration.shop,
+        getattr(integration, "scopes", None),
+        order_id,
+    )
+
     customer_gid = _ensure_shopify_customer(order, integration)
+    logger.info(
+        "[shopify-costumer-sync] sync: customerSet OK customer_gid=%s order_id=%s",
+        customer_gid,
+        order_id,
+    )
+    _sync_email_marketing_consent(order, integration, customer_gid)
     _assign_shopify_customer_to_order(order, integration, customer_gid)
+    logger.info(
+        "[shopify-costumer-sync] sync: orderCustomerSet OK order_id=%s", order_id
+    )
 
     costumer = order.costumer
     if costumer is not None:
@@ -82,6 +137,13 @@ def sync_order_costumer_to_shopify(order_id: int) -> None:
         costumer.external_costumer_id = _to_external_resource_id(customer_gid)
         db.session.add(costumer)
         db.session.commit()
+        logger.info(
+            "[shopify-costumer-sync] sync: costumer stamped costumer_id=%s "
+            "external_costumer_id=%s order_id=%s",
+            costumer.id,
+            costumer.external_costumer_id,
+            order_id,
+        )
 
 
 def _build_submitted_fields_snapshot(order: Order) -> dict[str, Any]:
@@ -92,6 +154,7 @@ def _build_submitted_fields_snapshot(order: Order) -> dict[str, Any]:
         "client_primary_phone": order.client_primary_phone,
         "client_secondary_phone": order.client_secondary_phone,
         "client_address": order.client_address,
+        "marketing_messages": order.marketing_messages,
     }
 
 
@@ -110,6 +173,66 @@ def _ensure_shopify_customer(order: Order, integration: ShopifyIntegration) -> s
     return customer_id
 
 
+def _sync_email_marketing_consent(
+    order: Order,
+    integration: ShopifyIntegration,
+    customer_gid: str,
+) -> None:
+    """Push the order's email marketing consent to the Shopify customer.
+
+    No-op when ``marketing_messages`` is None/unavailable (never treated as an
+    unsubscribe) or when the customer has no email. Errors from Shopify propagate
+    and fail the command, matching the rest of the sync. Idempotent: re-running
+    with the same boolean lands Shopify in the same subscription state.
+    """
+    variables = _build_email_marketing_consent_variables(order, customer_gid)
+    if variables is None:
+        logger.info(
+            "[shopify-costumer-sync] consent: skipped (no marketing value or email) order_id=%s",
+            getattr(order, "id", None),
+        )
+        return
+
+    _post_shopify_graphql(
+        integration=integration,
+        query=CUSTOMER_EMAIL_MARKETING_CONSENT_UPDATE_MUTATION,
+        variables=variables,
+    )
+    logger.info(
+        "[shopify-costumer-sync] consent: %s applied customer_gid=%s order_id=%s",
+        variables["input"]["emailMarketingConsent"]["marketingState"],
+        customer_gid,
+        getattr(order, "id", None),
+    )
+
+
+def _build_email_marketing_consent_variables(
+    order: Order,
+    customer_gid: str,
+) -> dict[str, Any] | None:
+    marketing_messages = getattr(order, "marketing_messages", None)
+    if marketing_messages is None:
+        return None
+
+    email = _resolve_customer_email(order, getattr(order, "costumer", None))
+    if not email:
+        return None
+
+    consent: dict[str, Any] = {
+        "marketingState": "SUBSCRIBED" if marketing_messages else "UNSUBSCRIBED",
+        "consentUpdatedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    if marketing_messages:
+        consent["marketingOptInLevel"] = "SINGLE_OPT_IN"
+
+    return {
+        "input": {
+            "customerId": customer_gid,
+            "emailMarketingConsent": consent,
+        }
+    }
+
+
 def _assign_shopify_customer_to_order(
     order: Order,
     integration: ShopifyIntegration,
@@ -125,29 +248,43 @@ def _assign_shopify_customer_to_order(
     )
 
 
-def _build_customer_set_payload(order: Order, costumer: Costumer | None) -> dict[str, Any]:
-    email = _pick_first_non_empty(
-        getattr(costumer, "email", None),
+def _resolve_customer_email(order: Order, costumer: Costumer | None) -> str | None:
+    # Prefer the value submitted on the order (the freshly filled client form)
+    # over the stored costumer entity, which may still hold placeholder data.
+    return _pick_first_non_empty(
         getattr(order, "client_email", None),
+        getattr(costumer, "email", None),
     )
+
+
+def _build_customer_set_payload(order: Order, costumer: Costumer | None) -> dict[str, Any]:
+    # Prefer the values submitted on the order (the freshly filled client form)
+    # over the stored costumer entity, which may still hold placeholder data
+    # created during inbound ingestion. Phone and address already do this.
+    email = _resolve_customer_email(order, costumer)
     phone = _build_phone_string(
         getattr(order, "client_primary_phone", None)
         or _extract_default_phone(costumer)
     )
+    # Prefer the known Shopify customer id so an edit that changes the email or
+    # phone still updates the SAME customer instead of creating a duplicate.
+    existing_external_id = getattr(costumer, "external_costumer_id", None)
     identifier: dict[str, str] | None = None
-    if email:
+    if existing_external_id:
+        identifier = {"id": _to_shopify_gid("Customer", str(existing_external_id))}
+    elif email:
         identifier = {"email": email}
     elif phone:
         identifier = {"phone": phone}
 
     first_name = _pick_first_non_empty(
-        getattr(costumer, "first_name", None),
         getattr(order, "client_first_name", None),
+        getattr(costumer, "first_name", None),
         "Shopify",
     )
     last_name = _pick_first_non_empty(
-        getattr(costumer, "last_name", None),
         getattr(order, "client_last_name", None),
+        getattr(costumer, "last_name", None),
         "Customer",
     )
 
@@ -226,9 +363,26 @@ def _build_phone_string(value: Any) -> str | None:
         return None
     prefix = value.get("prefix")
     number = value.get("number")
-    if isinstance(prefix, str) and isinstance(number, str) and prefix.strip() and number.strip():
-        return f"{prefix.strip()}{number.strip()}"
-    return None
+    if not (isinstance(prefix, str) and isinstance(number, str) and prefix.strip() and number.strip()):
+        return None
+
+    prefix = prefix.strip()
+    if not prefix.startswith("+"):
+        prefix = "+" + prefix.lstrip("+")
+    candidate = f"{prefix}{number.strip()}"
+
+    # Shopify rejects the entire customerSet mutation on an invalid phone, so
+    # normalize to E.164 and drop it if it cannot be validated rather than let
+    # one bad field block the whole customer update.
+    try:
+        parsed = phonenumbers.parse(candidate, None)
+    except phonenumbers.NumberParseException:
+        logger.warning("[shopify-costumer-sync] dropping unparseable phone %r", candidate)
+        return None
+    if not phonenumbers.is_valid_number(parsed):
+        logger.warning("[shopify-costumer-sync] dropping invalid phone %r", candidate)
+        return None
+    return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
 
 
 def _normalize_country_code(value: Any) -> str | None:
@@ -283,6 +437,13 @@ def _post_shopify_graphql(
         headers=headers,
         timeout=15,
     )
+    if response.status_code >= 400:
+        logger.error(
+            "[shopify-costumer-sync] graphql HTTP error status=%s url=%s body=%s",
+            response.status_code,
+            url,
+            response.text[:1000],
+        )
     response.raise_for_status()
     payload = response.json()
     if payload.get("errors"):

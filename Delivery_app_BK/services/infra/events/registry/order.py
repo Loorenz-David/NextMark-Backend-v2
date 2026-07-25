@@ -20,6 +20,7 @@ from Delivery_app_BK.services.infra.events.handlers.order.order_shopify import (
     push_external_schedule_on_delivery_plan_unassigned,
     push_external_schedule_on_delivery_rescheduled,
     notify_schedule_targets_on_order_created,
+    sync_shopify_costumer_on_client_form_submitted,
     sync_shopify_fulfillment_on_order_completed,
 )
 from Delivery_app_BK.services.infra.events.handlers.order.order_sms import (
@@ -166,4 +167,8 @@ def register_order_event_handlers(event_bus: EventBus) -> None:
     event_bus.register(
         OrderEvent.CLIENT_FORM_SUBMITTED.value,
         send_email_on_client_form_submitted,
+    )
+    event_bus.register(
+        OrderEvent.CLIENT_FORM_SUBMITTED.value,
+        sync_shopify_costumer_on_client_form_submitted,
     )

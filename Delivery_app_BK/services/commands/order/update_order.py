@@ -12,10 +12,14 @@ from Delivery_app_BK.services.domain.client_form.terms_acceptance import (
 )
 from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.models import (
+    Costumer,
     DeliveryPlan,
     Order,
     OrderDeliveryWindow,
     db,
+)
+from Delivery_app_BK.services.commands.order.apply_costumer_from_order import (
+    apply_order_client_fields_to_costumer,
 )
 from Delivery_app_BK.services.commands.order.create_serializers import (
     serialize_created_order,
@@ -102,6 +106,7 @@ DETAIL_FIELDS = MUTABLE_FIELDS.difference(WINDOW_FIELDS)
 def update_order(ctx: ServiceContext):
     ctx.set_relationship_map({})
     targets = extract_targets(ctx)
+    _extract_costumer_update_flags(targets)
     _validate_targets_update_fields(targets)
     _apply_terms_acceptance(ctx, targets)
 
@@ -181,7 +186,8 @@ def apply_order_updates(
     updated_orders: list[Order] = []
     pending_events: list[dict[str, Any]] = []
     order_deltas: list[OrderUpdateDelta] = []
-    existing_orders = _resolve_orders_by_targets(ctx, targets)
+    load_costumer = any(target.get("update_costumer") for target in targets)
+    existing_orders = _resolve_orders_by_targets(ctx, targets, load_costumer=load_costumer)
     team_timezone = resolve_order_delivery_windows_timezone(ctx)
 
     for order_target in targets:
@@ -208,6 +214,9 @@ def apply_order_updates(
                 normalized_delivery_windows=normalized_delivery_windows,
                 team_id=ctx.team_id,
             )
+
+        if order_target.get("update_costumer"):
+            apply_order_client_fields_to_costumer(existing, raw_fields)
 
         new_values = _capture_sync_values(existing)
         new_driver_visible_values = _capture_driver_visible_values(existing)
@@ -356,6 +365,18 @@ def _resolve_delivery_plan_for_order(order: Order) -> DeliveryPlan | None:
     return db.session.get(DeliveryPlan, delivery_plan_id)
 
 
+def _extract_costumer_update_flags(targets: list[dict[str, Any]]) -> None:
+    """Pop the ``update_costumer`` control flag out of each target's fields.
+
+    The flag rides inside ``fields`` (the only key ``extract_targets`` keeps) but
+    is not an Order column, so it is lifted onto the target and removed before
+    field validation and injection ever see it.
+    """
+    for target in targets:
+        fields = target.get("fields") or {}
+        target["update_costumer"] = bool(fields.pop("update_costumer", False))
+
+
 def _validate_targets_update_fields(targets: list[dict[str, Any]]) -> None:
     for target in targets:
         target_id = target["target_id"]
@@ -454,6 +475,8 @@ def _replace_order_delivery_windows(
 def _resolve_orders_by_targets(
     ctx: ServiceContext,
     targets: list[dict[str, Any]],
+    *,
+    load_costumer: bool = False,
 ) -> dict[int | str, Order]:
     target_ids = [target["target_id"] for target in targets]
     int_ids = [value for value in target_ids if isinstance(value, int)]
@@ -466,10 +489,19 @@ def _resolve_orders_by_targets(
     if model_requires_team(Order) and ctx.check_team_id:
         team_id = require_team_id(ctx)
 
+    load_options = [joinedload(Order.delivery_plan), selectinload(Order.delivery_windows)]
+    if load_costumer:
+        load_options.extend(
+            [
+                selectinload(Order.costumer).selectinload(Costumer.addresses),
+                selectinload(Order.costumer).selectinload(Costumer.phones),
+            ]
+        )
+
     if int_ids:
         query = (
             db.session.query(Order)
-            .options(joinedload(Order.delivery_plan), selectinload(Order.delivery_windows))
+            .options(*load_options)
             .filter(Order.id.in_(int_ids))
         )
         if team_id is not None:
@@ -480,7 +512,7 @@ def _resolve_orders_by_targets(
     if client_ids:
         query = (
             db.session.query(Order)
-            .options(joinedload(Order.delivery_plan), selectinload(Order.delivery_windows))
+            .options(*load_options)
             .filter(Order.client_id.in_(client_ids))
         )
         if team_id is not None:

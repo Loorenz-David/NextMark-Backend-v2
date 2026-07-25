@@ -11,6 +11,7 @@ SHOPIFY_ORDER_COSTUMER_EDIT_FIELDS = {
     "client_primary_phone",
     "client_secondary_phone",
     "client_address",
+    "marketing_messages",
 }
 
 
@@ -33,14 +34,11 @@ def should_sync_shopify_order_costumer(order: Any, submitted_fields: dict[str, A
     if not has_shopify_order_costumer_field_changes(submitted_fields):
         return False
 
-    costumer = getattr(order, "costumer", None)
-    if costumer is None:
-        return False
-
-    return (
-        getattr(costumer, "external_source", None) != SHOPIFY_EXTERNAL_SOURCE
-        and not getattr(costumer, "external_costumer_id", None)
-    )
+    # Fires for any Shopify order that has a costumer, whether or not it is
+    # already linked to Shopify — the sync upserts the customer so edits made
+    # after the initial link are pushed back. Idempotency and duplicate-safety
+    # rely on identifying the customer by its Shopify id when one is known.
+    return getattr(order, "costumer", None) is not None
 
 
 def should_fulfill_shopify_order(order: Any) -> bool:

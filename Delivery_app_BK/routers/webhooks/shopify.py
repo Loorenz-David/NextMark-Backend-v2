@@ -6,7 +6,10 @@ from Delivery_app_BK.services.commands.integration_shopify.webhooks import (
     kill_event,
 )
 from Delivery_app_BK.services.infra.jobs import enqueue_job, DEFAULT_RETRY_POLICY
-from Delivery_app_BK.services.infra.jobs.tasks.shopify import process_shopify_order_webhook_job
+from Delivery_app_BK.services.infra.jobs.tasks.shopify import (
+    process_shopify_order_webhook_job,
+    process_shopify_customer_webhook_job,
+)
 
 shopify_webhook_bp = Blueprint("shopify_webhook_bp", __name__)
 
@@ -102,6 +105,65 @@ def shopify_orders_webhook():
    
 
  
+
+@shopify_webhook_bp.route("/customers", methods=["POST"])
+def shopify_customers_webhook():
+    raw_body = request.get_data()
+    headers = request.headers
+
+    webhook_id = headers.get("X-Shopify-Webhook-Id")
+    shop_domain = headers.get("X-Shopify-Shop-Domain")
+    topic = headers.get("X-Shopify-Topic")
+    current_app.logger.info(
+        "Shopify customer webhook received | webhook_id=%s shop=%s topic=%s body_bytes=%s",
+        webhook_id,
+        shop_domain,
+        topic,
+        len(raw_body or b""),
+    )
+
+    try:
+        verify_shopify_webhook(raw_body, headers)
+    except Exception:
+        current_app.logger.exception(
+            "Shopify customer webhook signature verification failed | webhook_id=%s shop=%s topic=%s",
+            webhook_id,
+            shop_domain,
+            topic,
+        )
+        raise
+
+    event, created = reserve_webhook_event(
+        webhook_id=webhook_id,
+        shop_domain=shop_domain,
+        topic=topic,
+    )
+
+    if not created:
+        if event.status == "completed":
+            return "", 200
+        if event.retry_counter > 3:
+            kill_event(event)
+            current_app.logger.warning(
+                "Shopify customer webhook dead-lettered after retries | webhook_id=%s event_id=%s retries=%s",
+                webhook_id,
+                getattr(event, "id", None),
+                getattr(event, "retry_counter", None),
+            )
+            return "", 200
+
+    payload = request.get_json(silent=True) or {}
+
+    enqueue_job(
+        queue_key="default",
+        fn=process_shopify_customer_webhook_job,
+        args=(event.id, shop_domain, payload),
+        retry_policy=DEFAULT_RETRY_POLICY,
+        description=f"shopify-customer-webhook:{webhook_id}",
+    )
+
+    return "", 200
+
 
 @shopify_webhook_bp.route("/orders/test", methods=["POST"])
 def shop_test():

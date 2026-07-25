@@ -30,7 +30,12 @@ def connect_to_shopify_store ( ctx: ServiceContext, shop ):
         "read_inventory",
         "write_inventory",
         "read_locations",
+        "read_customers",
+    "write_customers",
+    "read_orders",
+    "write_orders",
     ])
+    
 
     redirect_uri = SHOPIFY_REDIRECT_URI
     state = secrets.token_urlsafe(32)
