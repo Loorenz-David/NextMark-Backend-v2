@@ -2,6 +2,9 @@ from flask import request
 from flask_socketio import disconnect, join_room
 
 from Delivery_app_BK.sockets.connection.auth import verify_socket_claims
+from Delivery_app_BK.sockets.handlers.external_form import (
+    broadcast_external_form_presence_on_disconnect,
+)
 from Delivery_app_BK.sockets.notifications import emit_notification_snapshot_for_claims
 from Delivery_app_BK.sockets.connection.state import active_user_sessions
 from Delivery_app_BK.sockets.rooms.names import build_user_app_room, build_user_room
@@ -29,6 +32,7 @@ def handle_connect(*_args, **_kwargs):
 
 def handle_disconnect():
     sid = request.sid
+    broadcast_external_form_presence_on_disconnect(sid)
     for user_id, sessions in list(active_user_sessions.items()):
         if sid in sessions:
             sessions.remove(sid)

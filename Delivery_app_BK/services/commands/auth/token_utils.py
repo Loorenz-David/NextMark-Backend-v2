@@ -1,4 +1,3 @@
-from datetime import timedelta
 from uuid import uuid4
 
 from flask_jwt_extended import create_access_token, create_refresh_token
@@ -93,7 +92,7 @@ def build_user_tokens(
     socket_token = create_access_token(
         identity=identity_data,
         additional_claims=claims,
-        expires_delta=timedelta(hours=24),
+        expires_delta=False,
     )
 
     return {

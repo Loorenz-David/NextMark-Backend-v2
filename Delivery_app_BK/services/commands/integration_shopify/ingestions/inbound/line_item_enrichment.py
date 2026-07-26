@@ -30,6 +30,7 @@ TABLE_EXTENSION_TYPE_METAFIELD_KEYS = {
 }
 TABLE_EXTENSION_QUANTITY_METAFIELD_KEYS = {
     "extensions_quantity",
+    "extension_quantity",
 }
 
 
@@ -347,7 +348,9 @@ def _apply_table_extension_from_metafields(
         metafields, TABLE_EXTENSION_TYPE_METAFIELD_KEYS
     )
     if extension_type is not None:
-        new_properties.append({"name": "extension_type", "value": extension_type})
+        new_properties.append(
+            {"name": "extension_type", "value": _normalize_extension_type(extension_type)}
+        )
 
     number_of_extensions = _resolve_table_extensions_quantity(metafields)
     if number_of_extensions is not None:
@@ -370,6 +373,15 @@ def _resolve_table_extensions_quantity(metafields: dict[str, str]) -> int | None
         if parsed is not None:
             return parsed
     return None
+
+
+def _normalize_extension_type(value: str) -> str:
+    normalized = value.strip().lower()
+    if "outside" in normalized:
+        return "outside"
+    if "inside" in normalized:
+        return "inside"
+    return value.strip()
 
 
 def _first_non_empty_metafield(metafields: dict[str, str], keys: set[str]) -> str | None:
