@@ -67,13 +67,35 @@ def _serialize_plan_totals(orders):
     return result
 
 
+def _collect_order_ids(args) -> list[str]:
+    """Read order_id from repeated params and/or a comma-separated value.
+
+    werkzeug's MultiDict.get returns only the first value, so a batch request
+    (?order_id=1&order_id=2 or ?order_id=1,2) would otherwise collapse to a
+    single order. Collect every value here, at the router, before the query
+    layer sees it.
+    """
+    raw_values = args.getlist("order_id")
+    order_ids: list[str] = []
+    for raw in raw_values:
+        for part in str(raw).split(","):
+            part = part.strip()
+            if part and part not in order_ids:
+                order_ids.append(part)
+    return order_ids
+
+
 @item_bp.route("/", methods=["GET"])
 @jwt_required()
 @role_required([ADMIN, ASSISTANT])
 def list_items():
     identity = get_jwt()
+    query_params = request.args.to_dict(flat=True)
+    order_ids = _collect_order_ids(request.args)
+    if order_ids:
+        query_params["order_id"] = order_ids
     ctx = ServiceContext(
-        query_params=request.args,
+        query_params=query_params,
         identity=identity,
     )
     outcome = run_service(lambda c: list_items_service(c), ctx)
