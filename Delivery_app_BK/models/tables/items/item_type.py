@@ -23,8 +23,8 @@ class ItemType(db.Model, TeamScopedMixin):
     client_id = Column(String, index=True)
     name = Column(String, nullable=False, index=True)
     is_system = Column(Boolean, default=False, index=True)
-    
-   
+    label_multiplier = Column(Integer, nullable=False, default=1, server_default="1")
+
 
     properties = db.relationship(
         "ItemProperty",

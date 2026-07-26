@@ -13,6 +13,7 @@ def serialize_item_types(instances: List[ ItemType ], ctx: ServiceContext):
             "id": instance.id,
             "client_id": instance.client_id,
             "name": instance.name,
+            "label_multiplier": instance.label_multiplier,
             "properties":[prop.id for prop in instance.properties],
         }
         unpacked_instances.append(unpacked)

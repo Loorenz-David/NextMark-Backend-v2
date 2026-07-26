@@ -53,7 +53,7 @@ class LabelTemplate(db.Model, TeamScopedMixin):
             )
         return value
     
-    ALLOWED_VARIANTS = set(["classic","7cm - 10cm"])
+    ALLOWED_VARIANTS = set(["classic","7cm - 10cm","packers"])
     @validates("selected_variant")
     def validate_channel(self, key, value):
         if value not in self.ALLOWED_VARIANTS:

@@ -25,6 +25,12 @@ CHAIR_QUANTITY_METAFIELD_KEYS = {
 ITEM_LOCATION_METAFIELD_KEYS = {
     "item_location",
 }
+TABLE_EXTENSION_TYPE_METAFIELD_KEYS = {
+    "extension_type",
+}
+TABLE_EXTENSION_QUANTITY_METAFIELD_KEYS = {
+    "extensions_quantity",
+}
 
 
 @dataclass(frozen=True)
@@ -267,6 +273,11 @@ def _matches_chair_item_type(mapped_item: dict[str, Any], _line_item: dict[str, 
     return isinstance(item_type, str) and "chair" in item_type.lower()
 
 
+def _matches_table_item_type(mapped_item: dict[str, Any], _line_item: dict[str, Any]) -> bool:
+    item_type = mapped_item.get("item_type")
+    return isinstance(item_type, str) and "table" in item_type.lower()
+
+
 def _matches_all_items(_mapped_item: dict[str, Any], _line_item: dict[str, Any]) -> bool:
     return True
 
@@ -321,6 +332,74 @@ def _resolve_chair_quantity_from_shopify_metafields(
         if parsed is not None:
             return parsed
     return None
+
+
+def _apply_table_extension_from_metafields(
+    mapped_item: dict[str, Any],
+    line_item: dict[str, Any],
+    resolver: ShopifyMetafieldResolver,
+) -> dict[str, Any]:
+    metafields = resolver.get_line_item_metafields(line_item)
+
+    new_properties: list[dict[str, Any]] = []
+
+    extension_type = _first_non_empty_metafield(
+        metafields, TABLE_EXTENSION_TYPE_METAFIELD_KEYS
+    )
+    if extension_type is not None:
+        new_properties.append({"name": "extension_type", "value": extension_type})
+
+    number_of_extensions = _resolve_table_extensions_quantity(metafields)
+    if number_of_extensions is not None:
+        new_properties.append(
+            {"name": "number_of_extensions", "value": number_of_extensions}
+        )
+
+    if not new_properties:
+        return mapped_item
+
+    mapped_item["properties"] = _merge_item_properties(
+        mapped_item.get("properties"), new_properties
+    )
+    return mapped_item
+
+
+def _resolve_table_extensions_quantity(metafields: dict[str, str]) -> int | None:
+    for key in TABLE_EXTENSION_QUANTITY_METAFIELD_KEYS:
+        parsed = _parse_non_negative_int(metafields.get(key))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _first_non_empty_metafield(metafields: dict[str, str], keys: set[str]) -> str | None:
+    for key in keys:
+        value = metafields.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _merge_item_properties(
+    existing: Any,
+    new_properties: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = (
+        [prop for prop in existing if isinstance(prop, dict)]
+        if isinstance(existing, list)
+        else []
+    )
+
+    for new_property in new_properties:
+        name = new_property.get("name")
+        for index, prop in enumerate(merged):
+            if prop.get("name") == name:
+                merged[index] = new_property
+                break
+        else:
+            merged.append(new_property)
+
+    return merged
 
 
 def _normalize_numeric_id(value: Any) -> int | None:
@@ -467,6 +546,21 @@ def _parse_positive_int(value: Any) -> int | None:
     return parsed if parsed > 0 else None
 
 
+def _parse_non_negative_int(value: Any) -> int | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if normalized.isdigit():
+        return int(normalized)
+
+    match = re.search(r"\d+", normalized)
+    if not match:
+        return None
+    return int(match.group(0))
+
+
 def _post_shopify_graphql(
     *,
     integration: ShopifyIntegration,
@@ -559,6 +653,11 @@ ITEM_ENRICHMENT_RULES: tuple[ItemEnrichmentRule, ...] = (
         name="chair_quantity_from_metafields",
         matches=_matches_chair_item_type,
         apply=_apply_chair_quantity_from_metafields,
+    ),
+    ItemEnrichmentRule(
+        name="table_extension_from_metafields",
+        matches=_matches_table_item_type,
+        apply=_apply_table_extension_from_metafields,
     ),
     ItemEnrichmentRule(
         name="item_position_from_metafields",
