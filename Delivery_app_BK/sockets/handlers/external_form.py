@@ -1,3 +1,5 @@
+import logging
+
 from flask import request
 from flask_socketio import join_room, leave_room
 
@@ -12,6 +14,7 @@ from Delivery_app_BK.sockets.contracts.realtime import (
 from Delivery_app_BK.sockets.rooms.names import build_external_form_room
 
 _EXTERNAL_FORM_ROOM_PREFIX = "external_form:"
+logger = logging.getLogger(__name__)
 
 
 def _team_id(claims):
@@ -56,10 +59,22 @@ def handle_external_form_join_user(claims, data):
     # payload user_id (if any) is ignored on purpose.
     team_id = _team_id(claims)
     if team_id is None:
+        logger.warning(
+            "[external-form-socket] join_rejected reason=missing_team sid=%s user_id=%s",
+            request.sid,
+            claims.get("user_id"),
+        )
         return
 
     room = build_external_form_room(team_id)
     join_room(room, sid=request.sid)
+    logger.info(
+        "[external-form-socket] room_joined team_id=%s user_id=%s sid=%s members=%s",
+        team_id,
+        claims.get("user_id"),
+        request.sid,
+        _room_member_count(room),
+    )
     _broadcast_presence(room)
 
 
@@ -67,10 +82,22 @@ def handle_external_form_join_user(claims, data):
 def handle_external_form_leave_user(claims, data):
     team_id = _team_id(claims)
     if team_id is None:
+        logger.warning(
+            "[external-form-socket] leave_rejected reason=missing_team sid=%s user_id=%s",
+            request.sid,
+            claims.get("user_id"),
+        )
         return
 
     room = build_external_form_room(team_id)
     leave_room(room, sid=request.sid)
+    logger.info(
+        "[external-form-socket] room_left team_id=%s user_id=%s sid=%s members=%s",
+        team_id,
+        claims.get("user_id"),
+        request.sid,
+        _room_member_count(room),
+    )
     _broadcast_presence(room)
 
 
@@ -79,9 +106,23 @@ def handle_external_form_submit_user(claims, data):
     team_id = _team_id(claims)
     form_data = (data or {}).get("form_data")
     if team_id is None or not form_data:
+        logger.warning(
+            "[external-form-socket] submit_rejected reason=%s sid=%s user_id=%s",
+            "missing_team" if team_id is None else "missing_form_data",
+            request.sid,
+            claims.get("user_id"),
+        )
         return
 
     room = build_external_form_room(team_id)
+    peers = _room_member_count(room, exclude_sid=request.sid)
+    logger.info(
+        "[external-form-socket] submit_relaying team_id=%s user_id=%s sid=%s peers=%s",
+        team_id,
+        claims.get("user_id"),
+        request.sid,
+        peers,
+    )
     socketio.emit(
         SERVER_EVENT_EXTERNAL_FORM_RECEIVED,
         {
@@ -102,8 +143,27 @@ def handle_external_form_progress_user(claims, data):
     team_id = _team_id(claims)
     progress_data = (data or {}).get("progress_data")
     if team_id is None or not progress_data:
+        logger.warning(
+            "[external-form-socket] progress_rejected reason=%s sid=%s user_id=%s",
+            "missing_team" if team_id is None else "missing_progress_data",
+            request.sid,
+            claims.get("user_id"),
+        )
         return
 
+    logger.debug(
+        "[external-form-socket] progress_relaying team_id=%s user_id=%s sid=%s "
+        "peers=%s session=%s seq=%s step=%s",
+        team_id,
+        claims.get("user_id"),
+        request.sid,
+        _room_member_count(
+            build_external_form_room(team_id), exclude_sid=request.sid
+        ),
+        progress_data.get("session"),
+        progress_data.get("seq"),
+        progress_data.get("step"),
+    )
     socketio.emit(
         SERVER_EVENT_EXTERNAL_FORM_PROGRESS,
         {
@@ -119,13 +179,30 @@ def handle_external_form_progress_user(claims, data):
 def handle_external_form_request_user(claims, data):
     team_id = _team_id(claims)
     if team_id is None:
+        logger.warning(
+            "[external-form-socket] request_rejected reason=missing_team sid=%s user_id=%s",
+            request.sid,
+            claims.get("user_id"),
+        )
         return
 
     room = build_external_form_room(team_id)
+    request_data = (data or {}).get("request_data") or {}
+    peers = _room_member_count(room, exclude_sid=request.sid)
+    logger.info(
+        "[external-form-socket] request_relaying team_id=%s user_id=%s sid=%s "
+        "peers=%s trace_id=%s order_id=%s",
+        team_id,
+        claims.get("user_id"),
+        request.sid,
+        peers,
+        request_data.get("diagnostic_trace_id"),
+        request_data.get("order_id"),
+    )
     socketio.emit(
         SERVER_EVENT_EXTERNAL_FORM_REQUESTED,
         {
-            "request_data": (data or {}).get("request_data") or {},
+            "request_data": request_data,
             "requested_by": claims.get("user_id"),
         },
         room=room,
