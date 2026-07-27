@@ -11,6 +11,9 @@ from Delivery_app_BK.route_optimization.constants.is_optimized import (
 )
 from Delivery_app_BK.services.context import ServiceContext
 from Delivery_app_BK.services.domain.route_operations.local_delivery import clear_expected_stop_schedule
+from Delivery_app_BK.services.domain.route_operations.local_delivery.route_lifecycle import (
+    stage_route_solution_stop_order_updates,
+)
 from Delivery_app_BK.services.queries.get_instance import get_instance
 from Delivery_app_BK.services.queries.route_solutions import (
     serialize_route_solution_stops,
@@ -153,7 +156,11 @@ def update_route_stop_position(
 
     if route_solution.is_optimized != IS_OPTIMIZED_NOT_OPTIMIZED:
         route_solution.is_optimized = IS_OPTIMIZED_PARTIAL
-    
+
+    # Clear the occupied positive positions before any refresh-time query can
+    # autoflush the final ordering and transiently violate the unique index.
+    stage_route_solution_stop_order_updates(touched_stops)
+
     effective_time_zone = ctx.time_zone
     orders_by_id = _orders_by_id_for_route_solution(route_solution)
     try:
@@ -172,30 +179,10 @@ def update_route_stop_position(
             f"Route timings could not be refreshed after stop reorder: {exc}"
         )
 
-   
-  
     db.session.add(route_solution)
-    
-    # Store final positions before updating to temporary values
-    # This avoids unique constraint violations when multiple stops change positions
-    # Use object identity here because cloned optimized-route stops may not have
-    # stable DB ids until after the intermediate flush.
-    final_positions = {id(stop): stop.stop_order for stop in touched_stops}
-    
-    # Phase 1: Assign temporary negative positions to clear constraint violations
-    for idx, stop in enumerate(touched_stops):
-        stop.stop_order = -(idx + 1)
-    
     db.session.add_all(_dedupe_and_sort_stops(touched_stops + refreshed_stops))
     if original_route_solution is not None:
         db.session.add(original_route_solution)
-    db.session.flush()
-    
-    # Phase 2: Assign final positions now that temporary positions are in place
-    for stop in touched_stops:
-        stop.stop_order = final_positions[id(stop)]
-    
-    db.session.add_all(_dedupe_and_sort_stops(touched_stops))
     db.session.commit()
 
     # Emit real-time socket events for all affected stops (per-stop for precise UI updates).

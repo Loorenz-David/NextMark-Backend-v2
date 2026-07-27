@@ -118,15 +118,9 @@ def _format_customer_eta_window(
     *,
     start_time: datetime,
     end_time: datetime,
-    reference_time: datetime,
 ) -> str:
     start_label = start_time.strftime("%H:%M")
     end_label = end_time.strftime("%H:%M")
-
-    if start_time.date() == reference_time.date():
-        if end_time.date() == start_time.date():
-            return f"today {start_label} to {end_label}"
-        return f"today {start_label} to {_format_short_date(end_time)} {end_label}"
 
     if start_time.date() == end_time.date():
         return f"{_format_short_date(start_time)} {start_label} to {end_label}"
@@ -208,7 +202,6 @@ def _resolve_expected_arrival_time(context: MessageRenderContext, channel: str, 
     except Exception:
         arrival_time = arrival_time.astimezone(ZoneInfo("UTC"))
 
-    reference_time = datetime.now(arrival_time.tzinfo)
     arrival_time = _round_to_nearest_30(arrival_time)
 
     if range_minutes > 0:
@@ -217,10 +210,7 @@ def _resolve_expected_arrival_time(context: MessageRenderContext, channel: str, 
         return _format_customer_eta_window(
             start_time=start_time,
             end_time=end_time,
-            reference_time=reference_time,
         )
-    if arrival_time.date() == reference_time.date():
-        return f"today {arrival_time.strftime('%H:%M')}"
     return f"{_format_short_date(arrival_time)} {arrival_time.strftime('%H:%M')}"
 
 
@@ -419,7 +409,7 @@ LABEL_RESOLVER_REGISTRY: dict[str, LabelResolver] = {
     "driver_phone": _resolve_driver_phone,
 
     "expected_arrival_time_costumer": _resolve_expected_arrival_time_costumer,
-    "expected_arrival_time": _resolve_expected_arrival_time,
+    "expected_arrival_time": _resolve_expected_arrival_time_costumer,
     "client_phone_number": _resolve_client_phone_number,
     "client_phone_number_secondary": lambda context, channel: _resolve_client_phone_number(context, channel, is_secondary=True),
     "client_address": _resolve_client_address,

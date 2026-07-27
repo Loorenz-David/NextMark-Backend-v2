@@ -15,6 +15,26 @@ def _count_open_order_cases(order: Order) -> int:
     return sum(1 for case in cases if case.state != OrderCaseState.RESOLVED.value)
 
 
+def _serialize_item_previews(order: Order, limit: int = 2) -> List[dict]:
+    items = sorted(
+        getattr(order, "items", None) or [],
+        key=lambda item: item.id,
+    )
+    previews = []
+    for item in items[:limit]:
+        images = item.item_images or []
+        previews.append(
+            {
+                "article_number": item.article_number,
+                "item_type": item.item_type,
+                "item_position": item.item_position,
+                "quantity": item.quantity,
+                "image_urls": images[:3],
+            }
+        )
+    return previews
+
+
 def _serialize_order_instance(instance: Order, ctx: ServiceContext, include_items: bool = False):
     creation_date = instance.creation_date
     delivery_windows = sort_delivery_window_instances(
@@ -45,6 +65,7 @@ def _serialize_order_instance(instance: Order, ctx: ServiceContext, include_item
         "updated_at": instance.updated_at.isoformat() if instance.updated_at else None,
         "items_updated_at": instance.items_updated_at.isoformat() if instance.items_updated_at else None,
         "item_type_counts": instance.item_type_counts,
+        "item_previews": _serialize_item_previews(instance),
         "order_state_id": instance.order_state_id,
         "route_plan_id": instance.route_plan_id,
         "route_group_id": instance.route_group_id,
