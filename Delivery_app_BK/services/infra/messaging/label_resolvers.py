@@ -123,11 +123,11 @@ def _format_customer_eta_window(
     end_label = end_time.strftime("%H:%M")
 
     if start_time.date() == end_time.date():
-        return f"{_format_short_date(start_time)} {start_label} to {end_label}"
+        return f"{_format_short_date(start_time)} {start_label} -> {end_label}"
 
     return (
         f"{_format_short_date(start_time)} {start_label} "
-        f"to {_format_short_date(end_time)} {end_label}"
+        f"-> {_format_short_date(end_time)} {end_label}"
     )
 
 
