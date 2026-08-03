@@ -65,6 +65,39 @@ def test_payload_without_the_field_is_untouched():
     module._reject_objective_change_on_assigned_order(order, {"client_email": "a@b.c"})
 
 
+def test_a_null_objective_is_not_treated_as_a_change():
+    # The admin order form sends order_plan_objective: null for any assigned
+    # order. That is "nothing to assert", not "clear it".
+    order = _order(route_plan_id=7, objective="local_delivery")
+
+    module._reject_objective_change_on_assigned_order(
+        order, {"order_plan_objective": None}
+    )
+
+
+def test_the_objective_is_never_written_while_the_order_is_assigned():
+    # Guarding alone is not enough: the field still has to be dropped, or a null
+    # from a client that echoes the whole order would clear a value the plan owns.
+    order = _order(route_plan_id=7, objective="local_delivery")
+
+    applied = module._build_mutable_fields(
+        {"order_plan_objective": None, "client_email": "a@b.c"}, order=order
+    )
+
+    assert "order_plan_objective" not in applied
+    assert applied["client_email"] == "a@b.c"
+
+
+def test_an_unassigned_order_still_writes_its_objective():
+    order = _order(route_plan_id=None, objective=None)
+
+    applied = module._build_mutable_fields(
+        {"order_plan_objective": "store_pickup"}, order=order
+    )
+
+    assert applied["order_plan_objective"] == "store_pickup"
+
+
 # --- freshness + extension dispatch key off the plan, not the order ----------
 
 

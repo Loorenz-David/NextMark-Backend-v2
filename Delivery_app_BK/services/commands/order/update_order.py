@@ -202,7 +202,7 @@ def apply_order_updates(
         raw_fields = order_target["fields"]
         existing: Order = existing_orders[target_id]
         _reject_objective_change_on_assigned_order(existing, raw_fields)
-        fields_to_apply = _build_mutable_fields(raw_fields)
+        fields_to_apply = _build_mutable_fields(raw_fields, order=existing)
         normalized_delivery_windows = _normalize_delivery_windows_for_update(
             raw_fields=raw_fields,
             team_timezone=team_timezone,
@@ -453,6 +453,12 @@ def _reject_objective_change_on_assigned_order(
         return
 
     requested = normalize_order_plan_objective(raw_fields.get("order_plan_objective"))
+    # A null is the client saying it has nothing to assert about a field the plan
+    # owns — the admin order form sends exactly that for any assigned order. It is
+    # not a request to clear the objective, and `_build_mutable_fields` drops it.
+    if requested is None:
+        return
+
     current = normalize_order_plan_objective(
         getattr(order, "order_plan_objective", None)
     )
@@ -465,12 +471,23 @@ def _reject_objective_change_on_assigned_order(
     )
 
 
-def _build_mutable_fields(raw_fields: dict[str, Any]) -> dict[str, Any]:
-    return {
+def _build_mutable_fields(
+    raw_fields: dict[str, Any],
+    order: Order | None = None,
+) -> dict[str, Any]:
+    fields = {
         key: value
         for key, value in raw_fields.items()
         if key in MUTABLE_FIELDS and key != "delivery_windows"
     }
+
+    # An assigned order takes its objective from its plan, so a write here is
+    # never meaningful. Dropping it stops a client that echoes the field back
+    # from clearing a value the plan is the source of truth for.
+    if order is not None and getattr(order, "route_plan_id", None) is not None:
+        fields.pop("order_plan_objective", None)
+
+    return fields
 
 
 def _normalize_delivery_windows_for_update(
