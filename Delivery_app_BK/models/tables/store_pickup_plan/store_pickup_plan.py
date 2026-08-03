@@ -40,4 +40,7 @@ class StorePickupPlan(
         back_populates="store_pickup_plans",
     )
 
-    route_plan = relationship("RoutePlan")
+    route_plan = relationship(
+        "RoutePlan",
+        back_populates="store_pickup_plan",
+    )

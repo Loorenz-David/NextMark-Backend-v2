@@ -19,6 +19,7 @@ def serialize_created_route_plan(instance: RoutePlan) -> dict:
         "id": instance.id,
         "client_id": instance.client_id,
         "label": instance.label,
+        "plan_type": instance.plan_type,
         "date_strategy": instance.date_strategy,
         "start_date": _to_iso(instance.start_date),
         "end_date": _to_iso(instance.end_date),

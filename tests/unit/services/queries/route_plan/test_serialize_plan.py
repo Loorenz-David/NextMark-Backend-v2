@@ -9,6 +9,7 @@ def _plan(route_groups):
         id=11,
         client_id="delivery_plan:11",
         label="Plan A",
+        plan_type="local_delivery",
         date_strategy="single",
         start_date=None,
         end_date=None,

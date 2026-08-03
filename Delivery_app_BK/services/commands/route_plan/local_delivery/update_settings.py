@@ -10,9 +10,6 @@ from Delivery_app_BK.services.commands.route_plan.local_delivery.route_solution.
 )
 from Delivery_app_BK.services.domain.route_operations.plan.route_freshness import touch_route_freshness
 from Delivery_app_BK.services.context import ServiceContext
-from Delivery_app_BK.services.domain.order.plan_objective_labels import (
-    resolve_route_plan_workflow_type,
-)
 from Delivery_app_BK.services.requests.route_plan.plan.local_delivery.update_settings import (
     RouteGroupSettingsRequest,
     RouteSolutionPatchRequest,
@@ -187,7 +184,7 @@ def apply_route_group_settings_request(
             payload={
                 "route_plan_id": route_plan.id,
                 "label": route_plan.label,
-                "plan_type": resolve_route_plan_workflow_type(),
+                "plan_type": route_plan.plan_type,
                 "date_strategy": route_plan.date_strategy,
                 "route_freshness_updated_at": route_plan.updated_at.isoformat() if route_plan.updated_at else None,
             },

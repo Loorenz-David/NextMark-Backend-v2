@@ -21,6 +21,10 @@ class RoutePlan(db.Model, TeamScopedMixin):
     label = Column(String, nullable=False, index=True)
     date_strategy = Column(String, nullable=False, default="single", index=True)
 
+    # Which planning domain owns this plan. Drives which per-order artifacts are
+    # built on assignment, and must stay in sync with order.order_plan_objective.
+    plan_type = Column(String, nullable=False, default="local_delivery", index=True)
+
   
     start_date = Column(UTCDateTime, index=True) 
     end_date = Column(UTCDateTime, index=True) 
@@ -64,7 +68,29 @@ class RoutePlan(db.Model, TeamScopedMixin):
         passive_deletes=True,
     )
 
+    international_shipping_plan = relationship(
+        "InternationalShippingPlan",
+        back_populates="route_plan",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    store_pickup_plan = relationship(
+        "StorePickupPlan",
+        back_populates="route_plan",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     DATE_STRATEGIES = {"single", "range"}
+
+    PLAN_TYPES = {
+        "local_delivery",
+        "international_shipping",
+        "store_pickup",
+    }
 
     @validates("date_strategy")
     def validate_date_strategy(self, key, value):
@@ -72,6 +98,15 @@ class RoutePlan(db.Model, TeamScopedMixin):
             raise ValueError(
                 f"Invalid date_strategy '{value}'. "
                 f"Allowed values: {self.DATE_STRATEGIES}"
+            )
+        return value
+
+    @validates("plan_type")
+    def validate_plan_type(self, key, value):
+        if value not in self.PLAN_TYPES:
+            raise ValueError(
+                f"Invalid plan_type '{value}'. "
+                f"Allowed values: {self.PLAN_TYPES}"
             )
         return value
 
