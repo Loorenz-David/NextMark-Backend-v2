@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.models import db, Order, RoutePlan, Team, RoutePlanState
 from Delivery_app_BK.sockets.notifications import notify_delivery_planning_event
 from Delivery_app_BK.services.domain.route_operations.plan.route_freshness import touch_route_freshness
@@ -83,8 +84,14 @@ def update_plan(ctx: ServiceContext):
 
     for target in extract_targets(ctx):
         fields = dict(target["fields"] or {})
+        # A plan's type decides which domain owns its orders and what artifacts
+        # they carry. Changing it in place would leave every assigned order
+        # pointing at the wrong domain, so it is fixed at creation.
+        if "plan_type" in fields:
+            raise ValidationFailed(
+                "plan_type cannot be changed after a plan is created."
+            )
         # Legacy plan-type fields are no longer supported under RoutePlan.
-        fields.pop("plan_type", None)
         fields.pop("local_delivery", None)
         fields.pop("international_shipping", None)
         fields.pop("store_pickup", None)

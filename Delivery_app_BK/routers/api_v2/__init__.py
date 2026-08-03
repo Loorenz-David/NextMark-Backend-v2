@@ -18,6 +18,8 @@ def _load_blueprints():
     from .costumer import costumer_bp
     from .route_plan.local_delivery_plans import route_groups_bp as local_delivery_plans_bp
     from .route_plan.plan import route_plans_bp as plan_bp
+    from .route_plan.international_shipping_plans import international_shipping_plans_bp
+    from .route_plan.store_pickup_plans import store_pickup_plans_bp
     from .route_plan.plan_overviews import route_plan_overviews_bp as plan_overviews_bp
     from .route_plan.route_operations import route_operations_bp
     from .drivers import drivers_bp
@@ -59,6 +61,8 @@ def _load_blueprints():
         label_template_bp,
         message_template_bp,
         plan_bp,
+        international_shipping_plans_bp,
+        store_pickup_plans_bp,
         local_delivery_plans_bp,
         order_bp,
         order_assignment_bp,
@@ -104,6 +108,8 @@ def _load_blueprints():
             "label_template_bp": label_template_bp,
             "message_template_bp": message_template_bp,
             "plan_bp": plan_bp,
+            "international_shipping_plans_bp": international_shipping_plans_bp,
+            "store_pickup_plans_bp": store_pickup_plans_bp,
             "order_bp": order_bp,
             "order_assignment_bp": order_assignment_bp,
             "order_messaging_bp": order_messaging_bp,
@@ -161,6 +167,13 @@ def register_v2_blueprints(app):
     app.register_blueprint(bp["label_template_bp"], url_prefix="/api_v2/label_templates")
     app.register_blueprint(bp["message_template_bp"], url_prefix="/api_v2/message_templates")
     app.register_blueprint(bp["plan_bp"], url_prefix="/api_v2/route_plans")
+    app.register_blueprint(
+        bp["international_shipping_plans_bp"],
+        url_prefix="/api_v2/international_shipping_plans",
+    )
+    app.register_blueprint(
+        bp["store_pickup_plans_bp"], url_prefix="/api_v2/store_pickup_plans"
+    )
     app.register_blueprint(bp["order_bp"], url_prefix="/api_v2/orders")
     app.register_blueprint(bp["order_assignment_bp"], url_prefix="/api_v2/order_assignments")
     app.register_blueprint(bp["order_messaging_bp"], url_prefix="/api_v2/order_messages")
