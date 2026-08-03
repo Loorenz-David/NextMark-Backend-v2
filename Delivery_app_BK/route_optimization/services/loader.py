@@ -57,6 +57,12 @@ def load_optimization_context(ctx:ServiceContext) -> OptimizationContext:
     if not route_plan:
         raise ValidationFailed("Route group is missing route plan.")
 
+    if route_plan.plan_type != "local_delivery":
+        raise ValidationFailed(
+            f"Route optimization is only available for local delivery plans. "
+            f"This plan is '{route_plan.plan_type}'."
+        )
+
     is_route_solution_end_date_valid(route_plan)
 
     route_solution = _select_route_solution(route_group)
@@ -64,7 +70,13 @@ def load_optimization_context(ctx:ServiceContext) -> OptimizationContext:
     orders = (
         db.session.query(Order)
         .options(selectinload(Order.delivery_windows), selectinload(Order.items))
-        .filter(Order.route_plan_id == route_plan.id)
+        .filter(
+            Order.route_plan_id == route_plan.id,
+            # Shipments are built from every order on the plan, whether or not it
+            # has a stop. A foreign order reaching here would be routed to a
+            # vehicle, so it is excluded at the source rather than downstream.
+            Order.order_plan_objective == "local_delivery",
+        )
         .all()
     )
     if not orders:
