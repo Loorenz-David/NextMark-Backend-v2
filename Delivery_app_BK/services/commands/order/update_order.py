@@ -135,14 +135,15 @@ def update_order(ctx: ServiceContext):
         if extension_result.instances:
             db.session.add_all(extension_result.instances)
 
+        # Route freshness is a local-delivery concept, so it keys off the plan's
+        # own type rather than the order's objective — the plan is what owns the
+        # routes that go stale.
         delivery_plans_to_touch = [
             delta.delivery_plan
             for delta in order_deltas
             if (
                 delta.delivery_plan is not None
-                and normalize_order_plan_objective(
-                    getattr(delta.order_instance, "order_plan_objective", None)
-                ) == "local_delivery"
+                and getattr(delta.delivery_plan, "plan_type", None) == "local_delivery"
                 and bool(delta.changed_sections)
             )
         ]
@@ -200,6 +201,7 @@ def apply_order_updates(
         target_id = order_target["target_id"]
         raw_fields = order_target["fields"]
         existing: Order = existing_orders[target_id]
+        _reject_objective_change_on_assigned_order(existing, raw_fields)
         fields_to_apply = _build_mutable_fields(raw_fields)
         normalized_delivery_windows = _normalize_delivery_windows_for_update(
             raw_fields=raw_fields,
@@ -431,6 +433,36 @@ def _apply_terms_acceptance(ctx: ServiceContext, targets: list[dict[str, Any]]) 
 
         fields["accepted_terms_version_id"] = accepted_terms.id
         fields["terms_accepted_at"] = datetime.now(timezone.utc)
+
+
+def _reject_objective_change_on_assigned_order(
+    order: Order,
+    raw_fields: dict[str, Any],
+) -> None:
+    """An assigned order's objective belongs to its plan, not to the order.
+
+    Writing it directly would desync the two and strand whatever the current
+    domain built for the order — route stops, in the local delivery case. Moving
+    the order onto a plan of the target type is the operation that legitimately
+    changes it, and that path tears the old artifacts down. Repeating the current
+    value is allowed so clients can echo a full order back unchanged.
+    """
+    if "order_plan_objective" not in raw_fields:
+        return
+    if getattr(order, "route_plan_id", None) is None:
+        return
+
+    requested = normalize_order_plan_objective(raw_fields.get("order_plan_objective"))
+    current = normalize_order_plan_objective(
+        getattr(order, "order_plan_objective", None)
+    )
+    if requested == current:
+        return
+
+    raise ValidationFailed(
+        "order_plan_objective cannot be changed while the order is assigned to a "
+        "route plan. Move the order to a plan of the target type instead."
+    )
 
 
 def _build_mutable_fields(raw_fields: dict[str, Any]) -> dict[str, Any]:
