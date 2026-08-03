@@ -22,4 +22,7 @@ class InternationalShippingPlan(db.Model, TeamScopedMixin):
         nullable=False,
     )
 
-    route_plan = relationship("RoutePlan")
+    route_plan = relationship(
+        "RoutePlan",
+        back_populates="international_shipping_plan",
+    )

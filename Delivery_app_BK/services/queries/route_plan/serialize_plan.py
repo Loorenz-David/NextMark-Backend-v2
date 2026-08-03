@@ -56,6 +56,7 @@ def serialize_plans(
             "id": instance.id,
             "client_id": instance.client_id,
             "label": instance.label,
+            "plan_type": instance.plan_type,
             "date_strategy": instance.date_strategy,
             "start_date": start_date.isoformat() if start_date else None,
             "end_date": end_date.isoformat() if end_date else None,

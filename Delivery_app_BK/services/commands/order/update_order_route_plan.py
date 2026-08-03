@@ -134,15 +134,25 @@ def apply_orders_route_plan_change(
         }
 
     old_plans_by_id = _load_route_plans_by_id(ctx, list(old_plan_ids))
-    route_groups_for_new_plan = _load_route_groups_for_plan(ctx, new_plan.id)
-    destination_route_group_id_by_order_id = _resolve_destination_route_group_ids(
-        ctx=ctx,
-        changed_orders=changed_orders,
-        old_plan_id_by_order_id=old_plan_id_by_order_id,
-        route_groups_for_new_plan=route_groups_for_new_plan,
-        destination_route_group_id=destination_route_group_id,
-        new_plan_id=new_plan.id,
-    )
+    if new_plan.plan_type == "local_delivery":
+        route_groups_for_new_plan = _load_route_groups_for_plan(ctx, new_plan.id)
+        destination_route_group_id_by_order_id = _resolve_destination_route_group_ids(
+            ctx=ctx,
+            changed_orders=changed_orders,
+            old_plan_id_by_order_id=old_plan_id_by_order_id,
+            route_groups_for_new_plan=route_groups_for_new_plan,
+            destination_route_group_id=destination_route_group_id,
+            new_plan_id=new_plan.id,
+        )
+    else:
+        # Route groups belong to local delivery. Other planning domains have none,
+        # so there is nothing to resolve an order into and nothing to honour a
+        # caller-supplied group.
+        if destination_route_group_id is not None:
+            raise ValidationFailed(
+                "route_group_id is only valid for local delivery route plans."
+            )
+        destination_route_group_id_by_order_id = {}
     affected_route_groups = _resolve_affected_route_groups(
         ctx=ctx,
         old_route_group_id_by_order_id=old_route_group_id_by_order_id,
@@ -203,7 +213,10 @@ def apply_orders_route_plan_change(
             order_instance,
             destination_route_group_id_by_order_id.get(order_instance.id),
         )
-        order_instance.order_plan_objective = "local_delivery"
+        # The destination plan owns the objective. Moving an order across domains
+        # is what changes its objective, and the teardown of whatever the previous
+        # domain built for it happens in apply_order_plan_change below.
+        order_instance.order_plan_objective = new_plan.plan_type
 
         change_result = apply_order_plan_change(
             ctx=ctx,
@@ -391,6 +404,8 @@ def _prepare_old_local_delivery_batch_changes(
         if old_plan_id is None or old_route_group_id is None:
             continue
         if old_plan_id not in old_plans_by_id:
+            continue
+        if old_plans_by_id[old_plan_id].plan_type != "local_delivery":
             continue
         order_ids_by_old_route_group_id.setdefault(old_route_group_id, []).append(order_id)
         batched_order_ids.add(order_id)

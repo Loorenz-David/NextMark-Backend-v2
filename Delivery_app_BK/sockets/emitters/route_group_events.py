@@ -1,7 +1,4 @@
 from Delivery_app_BK.models import RouteGroup, User, db
-from Delivery_app_BK.services.domain.order.plan_objective_labels import (
-    resolve_route_plan_workflow_type,
-)
 from Delivery_app_BK.services.domain.route_operations.plan.route_freshness import get_route_freshness_updated_at
 from Delivery_app_BK.sockets.contracts.realtime import (
     BUSINESS_EVENT_ROUTE_GROUP_UPDATED,
@@ -40,7 +37,7 @@ def emit_route_group_updated(
             "route_group_id": route_group_id,
             "route_plan_id": route_plan_id,
             "label": route_plan.label,
-            "plan_type": resolve_route_plan_workflow_type(),
+            "plan_type": route_plan.plan_type,
             "route_freshness_updated_at": get_route_freshness_updated_at(route_plan),
             **(payload or {}),
         },

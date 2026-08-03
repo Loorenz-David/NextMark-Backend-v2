@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from Delivery_app_BK.services.domain.order.plan_objective_labels import (
-    resolve_effective_order_plan_objective,
-)
 from ....context import ServiceContext
 from ..extensions import merge_bundle_map, wrap_post_flush_action
 from .registry import resolve_update_extension_handler
@@ -12,12 +9,10 @@ from .types import OrderUpdateDelta, OrderUpdateExtensionContext, OrderUpdateExt
 
 
 def _resolve_plan_type(delta: OrderUpdateDelta) -> str | None:
-    delivery_plan = delta.delivery_plan
-    order = delta.order_instance
-    return resolve_effective_order_plan_objective(
-        getattr(order, "order_plan_objective", None),
-        has_route_plan=delivery_plan is not None,
-    )
+    # The plan states its own type. Reading it off the order's objective meant a
+    # drifted order could route its update through another domain's handler.
+    # An unassigned order has no plan and therefore no extensions to run.
+    return getattr(delta.delivery_plan, "plan_type", None)
 
 
 def apply_order_update_extensions(

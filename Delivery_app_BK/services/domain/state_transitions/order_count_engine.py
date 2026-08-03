@@ -14,9 +14,6 @@ import logging
 from typing import TYPE_CHECKING, Callable, Any
 
 from Delivery_app_BK.models import RoutePlan, RouteSolution, Order, OrderState, db
-from Delivery_app_BK.services.domain.order.plan_objective_labels import (
-    resolve_route_plan_workflow_type,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +88,7 @@ def _recompute_local_delivery_counts(plan: "RoutePlan") -> None:
 
 # Extend this dict when new plan types gain route-solution–like sub-tables.
 _PLAN_COUNT_HANDLERS: dict[str, PlanCountHandler] = {
-    "route_plan": _recompute_local_delivery_counts,
+    "local_delivery": _recompute_local_delivery_counts,
 }
 
 
@@ -103,7 +100,7 @@ def recompute_plan_order_counts(plan: "RoutePlan") -> None:
     if plan is None or plan.id is None:
         return
 
-    plan_type = resolve_route_plan_workflow_type()
+    plan_type = getattr(plan, "plan_type", None)
     handler = _PLAN_COUNT_HANDLERS.get(plan_type)
     if handler is None:
         return

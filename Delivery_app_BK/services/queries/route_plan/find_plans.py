@@ -1,6 +1,7 @@
 from typing import Dict
 from sqlalchemy import or_, and_
 
+from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.models import db, RoutePlan
 from Delivery_app_BK.services.utils import inject_team_id, model_requires_team
 
@@ -16,6 +17,34 @@ For adding a filter use:
         query = query.filter(RoutePlan.<field> == params[""])
 """
 
+def _normalize_plan_types(value) -> list[str]:
+    """Accepts a single plan type or a list of them.
+
+    An unknown value is rejected rather than quietly matching nothing — a typo
+    would otherwise be indistinguishable from "no plans of that type exist".
+    """
+    values = value if isinstance(value, (list, tuple, set)) else [value]
+
+    normalized: list[str] = []
+    for entry in values:
+        if not isinstance(entry, str):
+            raise ValidationFailed("plan_type must be a string or a list of strings.")
+        stripped = entry.strip()
+        if not stripped:
+            continue
+        if stripped not in RoutePlan.PLAN_TYPES:
+            raise ValidationFailed(
+                f"Invalid plan_type: {stripped}. "
+                f"Allowed values: {sorted(RoutePlan.PLAN_TYPES)}."
+            )
+        if stripped not in normalized:
+            normalized.append(stripped)
+
+    if not normalized:
+        raise ValidationFailed("plan_type must not be empty.")
+    return normalized
+
+
 def find_plans( params:Dict, ctx:ServiceContext ):
 
     query = db.session.query(RoutePlan)
@@ -30,6 +59,9 @@ def find_plans( params:Dict, ctx:ServiceContext ):
     if "label" in params:
         label = params.get("label", "").strip()
         query = query.filter( RoutePlan.label.ilike( f"{label}%") )
+
+    if "plan_type" in params:
+        query = query.filter(RoutePlan.plan_type.in_(_normalize_plan_types(params["plan_type"])))
 
     if "date_strategy" in params:
         query = query.filter(RoutePlan.date_strategy == params["date_strategy"])

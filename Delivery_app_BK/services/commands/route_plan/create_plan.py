@@ -27,9 +27,6 @@ from Delivery_app_BK.services.domain.route_operations.plan.route_group_zone_snap
     build_no_zone_route_group_snapshot,
     build_route_group_zone_snapshot,
 )
-from Delivery_app_BK.services.domain.order.plan_objective_labels import (
-    resolve_route_plan_workflow_type,
-)
 from Delivery_app_BK.services.domain.route_operations.plan.recompute_route_group_totals import (
     recompute_route_group_totals,
 )
@@ -107,6 +104,9 @@ def create_plan(ctx: ServiceContext):
             route_plan_fields = {
                 "client_id": item.client_id,
                 "label": item.label,
+                # This endpoint builds route-operations plans only. International
+                # shipping and store pickup get their own creation commands.
+                "plan_type": "local_delivery",
                 "date_strategy": item.date_strategy,
                 "start_date": item.start_date,
                 "end_date": item.end_date,
@@ -234,7 +234,7 @@ def create_plan(ctx: ServiceContext):
             payload={
                 "route_plan_id": route_plan_id,
                 "label": route_plan_payload.get("label"),
-                "plan_type": resolve_route_plan_workflow_type(),
+                "plan_type": route_plan_payload.get("plan_type"),
                 "date_strategy": route_plan_payload.get("date_strategy"),
                 "route_freshness_updated_at": route_plan_payload.get("updated_at"),
             },

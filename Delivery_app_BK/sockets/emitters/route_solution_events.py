@@ -1,9 +1,6 @@
 from flask import current_app
 
 from Delivery_app_BK.models import RouteSolution, RouteGroup, User, db
-from Delivery_app_BK.services.domain.order.plan_objective_labels import (
-    resolve_route_plan_workflow_type,
-)
 from Delivery_app_BK.services.domain.delivery_plan.plan.route_freshness import get_route_freshness_updated_at
 from Delivery_app_BK.sockets.contracts.realtime import (
     BUSINESS_EVENT_ROUTE_SOLUTION_CREATED,
@@ -50,7 +47,7 @@ def emit_route_solution_created(
             **_plan_id_aliases(route_group_id=route_group_id, route_plan_id=route_plan_id),
             "label": route_solution.label,
             "plan_label": route_group.route_plan.label if route_group.route_plan else None,
-            "plan_type": resolve_route_plan_workflow_type(),
+            "plan_type": route_group.route_plan.plan_type if route_group.route_plan else None,
             "route_freshness_updated_at": get_route_freshness_updated_at(route_group.route_plan),
             "is_selected": route_solution.is_selected,
             "driver_id": route_solution.driver_id,
@@ -118,7 +115,7 @@ def emit_route_solution_updated(
             **_plan_id_aliases(route_group_id=route_group_id, route_plan_id=route_plan_id),
             "label": route_solution.label,
             "plan_label": route_group.route_plan.label if route_group.route_plan else None,
-            "plan_type": resolve_route_plan_workflow_type(),
+            "plan_type": route_group.route_plan.plan_type if route_group.route_plan else None,
             "route_freshness_updated_at": get_route_freshness_updated_at(route_group.route_plan),
             "is_selected": route_solution.is_selected,
             "driver_id": route_solution.driver_id,

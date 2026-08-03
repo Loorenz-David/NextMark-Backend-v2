@@ -129,11 +129,6 @@ def create_order(ctx: ServiceContext):
         ):
             order_fields = dict(order_request.fields)
             order_fields["order_scalar_id"] = order_scalar_id
-            if not order_fields.get("order_plan_objective"):
-                order_fields["order_plan_objective"] = resolve_effective_order_plan_objective(
-                    None,
-                    fallback="local_delivery",
-                )
             normalized_windows = None
             if order_request.delivery_windows is not None:
                 normalized_windows = validate_and_normalize_delivery_windows(
@@ -148,6 +143,13 @@ def create_order(ctx: ServiceContext):
                 if order_request.delivery_plan_id is not None
                 else None
             )
+            if not order_fields.get("order_plan_objective"):
+                # An order joining a plan inherits that plan's domain. Only an
+                # unassigned order falls back to the default.
+                order_fields["order_plan_objective"] = resolve_effective_order_plan_objective(
+                    route_plan.plan_type if route_plan is not None else None,
+                    fallback="local_delivery",
+                )
             resolved_route_plan_id = None
             if route_plan:
                 resolved_route_plan_id = route_plan.id
@@ -206,10 +208,6 @@ def create_order(ctx: ServiceContext):
                     ctx=ctx,
                     order_instance=order_instance,
                     route_plan=route_plan,
-                    plan_objective=resolve_effective_order_plan_objective(
-                        order_instance.order_plan_objective,
-                        has_route_plan=True,
-                    ),
                 )
                 extra_instances.extend(objective_result.instances)
                 post_flush_actions.extend(objective_result.post_flush_actions)
