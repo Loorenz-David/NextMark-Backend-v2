@@ -10,7 +10,7 @@ from sqlalchemy.orm.exc import NoResultFound
 from Delivery_app_BK.services.domain.client_form.terms_acceptance import (
     resolve_asserted_terms_version,
 )
-from Delivery_app_BK.errors import ValidationFailed
+from Delivery_app_BK.errors import NotFound, ValidationFailed
 from Delivery_app_BK.models import (
     ClientFormTermsVersion,
     Costumer,
@@ -195,6 +195,7 @@ def apply_order_updates(
     order_deltas: list[OrderUpdateDelta] = []
     load_costumer = any(target.get("update_costumer") for target in targets)
     existing_orders = _resolve_orders_by_targets(ctx, targets, load_costumer=load_costumer)
+    requested_costumers = _resolve_requested_costumers(ctx, targets)
     team_timezone = resolve_order_delivery_windows_timezone(ctx)
 
     for order_target in targets:
@@ -202,6 +203,7 @@ def apply_order_updates(
         raw_fields = order_target["fields"]
         existing: Order = existing_orders[target_id]
         _reject_objective_change_on_assigned_order(existing, raw_fields)
+        _apply_costumer_relink(existing, order_target, requested_costumers)
         fields_to_apply = _build_mutable_fields(raw_fields, order=existing)
         normalized_delivery_windows = _normalize_delivery_windows_for_update(
             raw_fields=raw_fields,
@@ -374,15 +376,39 @@ def _resolve_delivery_plan_for_order(order: Order) -> DeliveryPlan | None:
 
 
 def _extract_costumer_update_flags(targets: list[dict[str, Any]]) -> None:
-    """Pop the ``update_costumer`` control flag out of each target's fields.
+    """Pop the ``update_costumer`` flag and ``costumer`` relink request out of
+    each target's fields.
 
-    The flag rides inside ``fields`` (the only key ``extract_targets`` keeps) but
-    is not an Order column, so it is lifted onto the target and removed before
-    field validation and injection ever see it.
+    Both ride inside ``fields`` (the only key ``extract_targets`` keeps) but
+    are not Order columns, so they are lifted onto the target and removed
+    before field validation and injection ever see them.
     """
     for target in targets:
         fields = target.get("fields") or {}
         target["update_costumer"] = bool(fields.pop("update_costumer", False))
+        target["requested_costumer_id"] = _extract_requested_costumer_id(
+            target["target_id"], fields
+        )
+
+
+def _extract_requested_costumer_id(target_id: Any, fields: dict[str, Any]) -> int | None:
+    """Pop and validate the ``costumer`` relink request, if any.
+
+    ``costumer: {costumer_id}`` mirrors the shape ``create_order`` accepts, so
+    a client that already builds that object for creation can reuse it here to
+    point an existing order at a different, already-existing Costumer.
+    """
+    costumer_ref = fields.pop("costumer", None)
+    if costumer_ref is None:
+        return None
+
+    if not isinstance(costumer_ref, dict) or not isinstance(
+        costumer_ref.get("costumer_id"), int
+    ):
+        raise ValidationFailed(
+            f"Target '{target_id}' costumer must be an object with an integer costumer_id"
+        )
+    return costumer_ref["costumer_id"]
 
 
 def _validate_targets_update_fields(targets: list[dict[str, Any]]) -> None:
@@ -525,6 +551,61 @@ def _replace_order_delivery_windows(
                 window_type=row.window_type,
             ),
         )
+
+
+def _resolve_requested_costumers(
+    ctx: ServiceContext,
+    targets: list[dict[str, Any]],
+) -> dict[int, Costumer]:
+    """Batch-load every ``Costumer`` a target asked to relink onto, team-scoped.
+
+    Addresses/phones are preloaded so a relink combined with
+    ``update_costumer: true`` can push the submitted client_* fields onto the
+    newly linked costumer without a second round trip.
+    """
+    requested_ids = {
+        target["requested_costumer_id"]
+        for target in targets
+        if target.get("requested_costumer_id") is not None
+    }
+    if not requested_ids:
+        return {}
+
+    team_id = None
+    if model_requires_team(Costumer) and ctx.check_team_id:
+        team_id = require_team_id(ctx)
+
+    query = (
+        db.session.query(Costumer)
+        .options(selectinload(Costumer.addresses), selectinload(Costumer.phones))
+        .filter(Costumer.id.in_(requested_ids))
+    )
+    if team_id is not None:
+        query = query.filter(Costumer.team_id == team_id)
+
+    by_id = {costumer.id: costumer for costumer in query.all()}
+    missing = sorted(requested_ids - by_id.keys())
+    if missing:
+        raise NotFound(f"Costumers not found: {missing}")
+    return by_id
+
+
+def _apply_costumer_relink(
+    order: Order,
+    order_target: dict[str, Any],
+    requested_costumers: dict[int, Costumer],
+) -> None:
+    """Point ``order`` at a different, already-existing Costumer, if requested.
+
+    Runs independent of the ``update_costumer`` flag: relinking is the client
+    asserting which costumer instance the order belongs to, while
+    ``update_costumer`` separately controls whether the submitted client_*
+    fields get pushed onto whichever costumer ends up linked.
+    """
+    requested_costumer_id = order_target.get("requested_costumer_id")
+    if requested_costumer_id is None or requested_costumer_id == order.costumer_id:
+        return
+    order.costumer = requested_costumers[requested_costumer_id]
 
 
 def _resolve_orders_by_targets(
