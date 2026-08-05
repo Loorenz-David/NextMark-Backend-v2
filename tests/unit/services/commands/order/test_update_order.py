@@ -103,7 +103,7 @@ def test_apply_order_updates_emits_client_form_submitted_for_customer_change(mon
         delivery_plan=None,
         delivery_plan_id=None,
     )
-    monkeypatch.setattr(module, "_resolve_orders_by_targets", lambda *_args: {10: order})
+    monkeypatch.setattr(module, "_resolve_orders_by_targets", lambda *_args, **_kwargs: {10: order})
     monkeypatch.setattr(module, "resolve_order_delivery_windows_timezone", lambda _ctx: "UTC")
     monkeypatch.setattr(module, "_normalize_delivery_windows_for_update", lambda **_kwargs: None)
     monkeypatch.setattr(module, "_capture_sync_values", lambda _order: {})
@@ -142,7 +142,7 @@ def test_apply_order_updates_does_not_emit_client_form_submitted_for_other_chang
         delivery_plan=None,
         delivery_plan_id=None,
     )
-    monkeypatch.setattr(module, "_resolve_orders_by_targets", lambda *_args: {11: order})
+    monkeypatch.setattr(module, "_resolve_orders_by_targets", lambda *_args, **_kwargs: {11: order})
     monkeypatch.setattr(module, "resolve_order_delivery_windows_timezone", lambda _ctx: "UTC")
     monkeypatch.setattr(module, "_normalize_delivery_windows_for_update", lambda **_kwargs: None)
     monkeypatch.setattr(module, "_capture_sync_values", lambda _order: {})
