@@ -16,6 +16,7 @@ def _disable_shopify_image_lookup(monkeypatch):
         lambda *_args, **_kwargs: SimpleNamespace(
             get_line_item_images=lambda _line_item: [],
             get_line_item_page_link=lambda _line_item: None,
+            get_line_item_barcode=lambda _line_item: None,
         ),
     )
 
@@ -132,6 +133,7 @@ def test_create_internal_order_applies_shopify_item_images_after_filtering(monke
             get_line_item_page_link=lambda line_item: (
                 f"https://demo-shop.com/products/{line_item['sku'].lower()}"
             ),
+            get_line_item_barcode=lambda line_item: "BAR-1" if line_item.get("variant_id") == 3 else None,
         )
 
     monkeypatch.setattr(module, "ShopifyLineItemMediaResolver", _image_resolver)
@@ -154,6 +156,7 @@ def test_create_internal_order_applies_shopify_item_images_after_filtering(monke
             "article_number": "SKU-1",
             "item_images": ["https://cdn.example.com/SKU-1.jpg"],
             "page_link": "https://demo-shop.com/products/sku-1",
+            "reference_number": "BAR-1",
         }
     ]
 

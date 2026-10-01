@@ -19,6 +19,7 @@ def test_shopify_line_item_image_resolver_fetches_images_in_one_nodes_query(monk
             "nodes": [
                 {
                     "id": "gid://shopify/ProductVariant/30",
+                    "barcode": "  0123456789012  ",
                     "image": {"url": "https://cdn.example.com/variant-30.jpg"},
                     "product": {
                         "onlineStoreUrl": "https://shop.example.com/products/chair",
@@ -57,22 +58,27 @@ def test_shopify_line_item_image_resolver_fetches_images_in_one_nodes_query(monk
 
     images = resolver.get_line_item_images({"product_id": 20, "variant_id": 30})
     page_link = resolver.get_line_item_page_link({"product_id": 20, "variant_id": 30})
+    barcode = resolver.get_line_item_barcode({"product_id": 20, "variant_id": 30})
     fallback_images = resolver.get_line_item_images({"product_id": 20})
     fallback_page_link = resolver.get_line_item_page_link({"product_id": 20})
+    missing_barcode = resolver.get_line_item_barcode({"product_id": 20})
 
     assert images == ["https://cdn.example.com/variant-30.jpg"]
     assert page_link == "https://shop.example.com/products/chair?variant=30"
+    assert barcode == "0123456789012"
     assert fallback_images == [
         "https://cdn.example.com/product-20-featured.jpg",
         "https://cdn.example.com/product-20-side.jpg",
     ]
     assert fallback_page_link == "https://demo.myshopify.com/products/table"
+    assert missing_barcode is None
     assert captured["integration"] is integration
     assert captured["variables"]["ids"] == [
         "gid://shopify/ProductVariant/30",
         "gid://shopify/Product/20",
     ]
     assert "nodes(ids: $ids)" in captured["query"]
+    assert "barcode" in captured["query"]
 
 
 def test_apply_shopify_line_item_media_leaves_item_unchanged_when_no_media():
@@ -80,6 +86,7 @@ def test_apply_shopify_line_item_media_leaves_item_unchanged_when_no_media():
     resolver = SimpleNamespace(
         get_line_item_images=lambda _line_item: [],
         get_line_item_page_link=lambda _line_item: None,
+        get_line_item_barcode=lambda _line_item: None,
     )
 
     enriched = module.apply_shopify_line_item_media(
@@ -89,3 +96,21 @@ def test_apply_shopify_line_item_media_leaves_item_unchanged_when_no_media():
     )
 
     assert enriched is item
+
+
+def test_apply_shopify_line_item_media_maps_barcode_without_images():
+    item = {"article_number": "SKU-1"}
+    resolver = SimpleNamespace(
+        get_line_item_images=lambda _line_item: [],
+        get_line_item_page_link=lambda _line_item: None,
+        get_line_item_barcode=lambda _line_item: "0123456789012",
+    )
+
+    enriched = module.apply_shopify_line_item_media(
+        mapped_item=item,
+        line_item={"variant_id": 30},
+        resolver=resolver,
+    )
+
+    assert enriched == {"article_number": "SKU-1", "reference_number": "0123456789012"}
+    assert item == {"article_number": "SKU-1"}

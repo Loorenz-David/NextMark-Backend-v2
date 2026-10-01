@@ -105,6 +105,7 @@ class ShopifyLineItemMediaResolver:
         self._line_items = list(line_items or [])
         self._loaded = False
         self._variant_images: dict[int, list[str]] = {}
+        self._variant_barcodes: dict[int, str] = {}
         self._product_images: dict[int, list[str]] = {}
         self._variant_page_links: dict[int, str] = {}
         self._product_page_links: dict[int, str] = {}
@@ -149,6 +150,13 @@ class ShopifyLineItemMediaResolver:
 
         return None
 
+    def get_line_item_barcode(self, line_item: dict[str, Any]) -> str | None:
+        if not isinstance(line_item, dict):
+            return None
+        self._ensure_loaded()
+        variant_id = _normalize_numeric_id(line_item.get("variant_id"))
+        return self._variant_barcodes.get(variant_id) if variant_id is not None else None
+
     def _ensure_loaded(self) -> None:
         if self._loaded:
             return
@@ -183,6 +191,9 @@ class ShopifyLineItemMediaResolver:
                 continue
 
             if resource == "ProductVariant":
+                barcode = node.get("barcode")
+                if isinstance(barcode, str) and barcode.strip():
+                    self._variant_barcodes[numeric_id] = barcode.strip()
                 images = _variant_image_urls(node)
                 if images:
                     self._variant_images[numeric_id] = images
@@ -258,7 +269,8 @@ def apply_shopify_line_item_media(
 
     images = resolver.get_line_item_images(line_item)
     page_link = resolver.get_line_item_page_link(line_item)
-    if not images and not page_link:
+    barcode = resolver.get_line_item_barcode(line_item)
+    if not images and not page_link and not barcode:
         return mapped_item
 
     item = dict(mapped_item)
@@ -266,6 +278,8 @@ def apply_shopify_line_item_media(
         item["item_images"] = images
     if page_link:
         item["page_link"] = page_link
+    if barcode:
+        item["reference_number"] = barcode
     return item
 
 
@@ -631,6 +645,7 @@ query getLineItemImages($ids: [ID!]!) {
   nodes(ids: $ids) {
     id
     ... on ProductVariant {
+      barcode
       image {
         url
       }
