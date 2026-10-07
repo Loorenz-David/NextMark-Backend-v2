@@ -1,9 +1,11 @@
 from sqlalchemy.orm import selectinload
 
 from Delivery_app_BK.errors import NotFound
-from Delivery_app_BK.models import Order, OrderEvent, db
+from Delivery_app_BK.models import Order, OrderEvent, UserRole, db
+from Delivery_app_BK.services.domain.user import resolve_user_role_id_for_team
 
 from ...context import ServiceContext
+from ..user import serialize_user_actor
 
 
 def _serialize_action(action) -> dict:
@@ -27,7 +29,35 @@ def _serialize_action(action) -> dict:
     }
 
 
-def _serialize_event(event) -> dict:
+def _serialize_actor(event, roles_by_id: dict[int, UserRole]) -> dict | None:
+    actor = event.actor
+    if actor is None:
+        return None
+
+    role_id = resolve_user_role_id_for_team(actor, event.team_id)
+    return serialize_user_actor(actor, roles_by_id.get(role_id))
+
+
+def _load_actor_roles(events: list) -> dict[int, UserRole]:
+    role_ids = {
+        resolve_user_role_id_for_team(event.actor, event.team_id)
+        for event in events
+        if event.actor is not None
+    }
+    role_ids.discard(None)
+    if not role_ids:
+        return {}
+
+    roles = (
+        db.session.query(UserRole)
+        .options(selectinload(UserRole.base_role))
+        .filter(UserRole.id.in_(role_ids))
+        .all()
+    )
+    return {role.id: role for role in roles}
+
+
+def _serialize_event(event, roles_by_id: dict[int, UserRole]) -> dict:
     sorted_actions = sorted(
         list(event.actions or []),
         key=lambda row: (row.created_at or row.updated_at, row.id),
@@ -40,6 +70,7 @@ def _serialize_event(event) -> dict:
         "order_id": event.order_id,
         "team_id": event.team_id,
         "actor_id": event.actor_id,
+        "actor": _serialize_actor(event, roles_by_id),
         "event_name": event.event_name,
         "payload": event.payload or {},
         "occurred_at": event.occurred_at.isoformat() if event.occurred_at else None,
@@ -66,7 +97,10 @@ def get_order_event_history(order_id: int, ctx: ServiceContext) -> dict:
     if order is None:
         raise NotFound(f"Order with id: {order_id} does not exist.")
 
-    event_query = db.session.query(OrderEvent).options(selectinload(OrderEvent.actions))
+    event_query = db.session.query(OrderEvent).options(
+        selectinload(OrderEvent.actions),
+        selectinload(OrderEvent.actor),
+    )
     if ctx.team_id:
         event_query = event_query.filter(OrderEvent.team_id == ctx.team_id)
 
@@ -77,7 +111,9 @@ def get_order_event_history(order_id: int, ctx: ServiceContext) -> dict:
         .all()
     )
 
+    roles_by_id = _load_actor_roles(events)
+
     return {
         "order_id": order_id,
-        "order_events": [_serialize_event(event) for event in events],
+        "order_events": [_serialize_event(event, roles_by_id) for event in events],
     }

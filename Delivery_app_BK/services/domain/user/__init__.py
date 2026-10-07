@@ -21,6 +21,7 @@ from .team_membership import (
     has_team_workspace_available,
     is_team_workspace_active,
     is_user_member_of_team,
+    resolve_user_role_id_for_team,
     resolve_user_team_membership,
 )
 
@@ -45,5 +46,6 @@ __all__ = [
     "has_team_workspace_available",
     "is_team_workspace_active",
     "is_user_member_of_team",
+    "resolve_user_role_id_for_team",
     "resolve_user_team_membership",
 ]

@@ -91,3 +91,14 @@ def resolve_user_team_membership(user: User, team_id: int | None) -> dict:
         "role_id": None,
         "workspace": get_current_workspace(user),
     }
+
+
+def resolve_user_role_id_for_team(user: User, team_id: int | None) -> int | None:
+    membership = resolve_user_team_membership(user, team_id)
+    if membership["role_id"] is not None:
+        return membership["role_id"]
+
+    if team_id is not None and getattr(user, "primals_team_id", None) == team_id:
+        return getattr(user, "primals_role_id", None)
+
+    return None
