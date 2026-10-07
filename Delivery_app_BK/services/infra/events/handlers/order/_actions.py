@@ -75,7 +75,9 @@ def _upsert_action(
     return action
 
 
-def run_action(order_event, action_name: str, _runner) -> None:
+def run_action(order_event, action_name: str) -> None:
+    # The task that runs the action is resolved from its name by the
+    # dispatcher, so handlers never import task modules.
     team_id = getattr(order_event, "team_id", None)
     resolved_schedule = resolve_order_action_schedule(order_event, action_name)
     if resolved_schedule is None:
@@ -108,7 +110,6 @@ def run_action(order_event, action_name: str, _runner) -> None:
 def run_immediate_action(
     order_event,
     action_name: str,
-    _runner,
     *,
     action_scope: str = "",
     payload: dict | None = None,

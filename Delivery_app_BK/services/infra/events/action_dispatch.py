@@ -4,16 +4,11 @@ from datetime import datetime, timezone
 
 from Delivery_app_BK.models import RoutePlanEventAction, OrderEventAction, db
 from Delivery_app_BK.services.infra.jobs import MESSAGING_RETRY_POLICY, enqueue_job, schedule_job
-from Delivery_app_BK.services.infra.tasks.order.notify_order_schedule_action import (
-    notify_order_schedule_action,
-)
-from Delivery_app_BK.services.infra.tasks.order.push_external_schedule_action import (
-    push_external_schedule_action,
-)
-from Delivery_app_BK.services.infra.tasks.route_plan.send_email import send_email as send_route_plan_email
-from Delivery_app_BK.services.infra.tasks.route_plan.send_sms import send_sms as send_route_plan_sms
-from Delivery_app_BK.services.infra.tasks.order.send_email import send_email as send_order_email
-from Delivery_app_BK.services.infra.tasks.order.send_sms import send_sms as send_order_sms
+
+# The task modules are imported inside the resolvers, not here. The tasks pull
+# in the order command package, which pulls in the event registry, which pulls
+# in this module: importing them at module level made any cold import of
+# `services.infra.tasks.order` fail on a partially initialised `send_sms`.
 
 
 def enqueue_order_action(action: OrderEventAction) -> None:
@@ -41,6 +36,15 @@ def enqueue_route_plan_action(action: RoutePlanEventAction) -> None:
 
 
 def _resolve_order_action_task(action_name: str):
+    from Delivery_app_BK.services.infra.tasks.order.notify_order_schedule_action import (
+        notify_order_schedule_action,
+    )
+    from Delivery_app_BK.services.infra.tasks.order.push_external_schedule_action import (
+        push_external_schedule_action,
+    )
+    from Delivery_app_BK.services.infra.tasks.order.send_email import send_email as send_order_email
+    from Delivery_app_BK.services.infra.tasks.order.send_sms import send_sms as send_order_sms
+
     if action_name == "order_schedule_notify":
         return notify_order_schedule_action
     if action_name == "order_external_schedule_push":
@@ -53,6 +57,9 @@ def _resolve_order_action_task(action_name: str):
 
 
 def _resolve_route_plan_action_task(action_name: str):
+    from Delivery_app_BK.services.infra.tasks.route_plan.send_email import send_email as send_route_plan_email
+    from Delivery_app_BK.services.infra.tasks.route_plan.send_sms import send_sms as send_route_plan_sms
+
     if action_name.endswith("_sms"):
         return send_route_plan_sms
     if action_name.endswith("_email"):

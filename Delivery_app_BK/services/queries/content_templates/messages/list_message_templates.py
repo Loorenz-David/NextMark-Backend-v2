@@ -29,25 +29,15 @@ def list_message_templates(ctx: ServiceContext):
     }
 
 def list_message_templates_bootstrap(ctx: ServiceContext):
+    # Bootstrap needs the whole set: one row per (event, channel, plan_type)
+    # exceeds a single page, and the caller discards pagination anyway.
     query = find_message_templates(ctx.query_params, ctx)
 
-    limit = int(ctx.query_params.get("limit", 50))
-    results = query.limit(limit + 1).all()
-    has_more = len(results) > limit
-    page_instances = results[:limit]
-
-    pagination = build_id_pagination(
-        page_instances=page_instances,
-        has_more=has_more,
-        ctx=ctx,
-    )
-
     serialized = serialize_message_templates_bootstrap(
-        instances=page_instances,
+        instances=query.all(),
         ctx=ctx,
     )
 
     return {
         "message_templates": serialized,
-        "message_templates_pagination": pagination,
     }

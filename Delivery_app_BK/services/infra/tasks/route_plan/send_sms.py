@@ -5,13 +5,16 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from Delivery_app_BK.models import RoutePlanEventAction, OrderEvent, OrderEventAction, db
-from Delivery_app_BK.services.domain.messaging import SCHEDULE_ANCHOR_FUTURE_BUSINESS_TIME
+from Delivery_app_BK.services.domain.messaging import (
+    SCHEDULE_ANCHOR_FUTURE_BUSINESS_TIME,
+    resolve_route_plan_message_plan_type,
+)
 from Delivery_app_BK.services.domain.order.order_events import OrderEvent as OrderDomainEvent
 
 from Delivery_app_BK.services.infra.messaging import MessageRenderContext
-from Delivery_app_BK.services.infra.messaging import resolve_sms_template
 from Delivery_app_BK.services.infra.messaging.action_scheduling import resolve_current_route_plan_future_anchor
 from Delivery_app_BK.services.infra.messaging.sms_service import send_sms_batch
+from Delivery_app_BK.services.infra.messaging.template_resolver import resolve_message_template
 
 
 ORDER_SMS_ACTION_NAME = "plan_delivery_rescheduled_sms"
@@ -202,9 +205,18 @@ def send_sms(action_id: int) -> None:
             _mark_action_failed(action, "Missing team context for route plan SMS send")
             return
 
-        template = resolve_sms_template(team_id=team_id, channel="sms", event_name=action.event.event_name)
+        plan_type = resolve_route_plan_message_plan_type(route_plan)
+        template = resolve_message_template(
+            team_id=team_id,
+            channel="sms",
+            event_name=action.event.event_name,
+            plan_type=plan_type,
+        )
         if template is None or not bool(template.enable):
-            _mark_action_skipped(action, "SMS template is missing or disabled at execution time")
+            _mark_action_skipped(
+                action,
+                f"SMS template is missing or disabled for plan type '{plan_type}' at execution time",
+            )
             return
 
         if action.schedule_anchor_type == SCHEDULE_ANCHOR_FUTURE_BUSINESS_TIME:
@@ -237,6 +249,7 @@ def send_sms(action_id: int) -> None:
 
         send_errors = send_sms_batch(
             team_id=team_id,
+            template=template,
             recipients=recipients,
             event_name=action.event.event_name,
         )

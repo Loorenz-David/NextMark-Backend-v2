@@ -3,12 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from Delivery_app_BK.models import MessageTemplate, db
+from Delivery_app_BK.models import MessageTemplate
 from Delivery_app_BK.services.domain.messaging import (
     SCHEDULE_ANCHOR_FUTURE_BUSINESS_TIME,
     SCHEDULE_ANCHOR_OCCURRED_AT,
     event_supports_future_anchor,
+    resolve_order_message_plan_type,
+    resolve_route_plan_message_plan_type,
 )
+from Delivery_app_BK.services.infra.messaging.template_resolver import resolve_message_template
 
 
 @dataclass(frozen=True)
@@ -20,28 +23,14 @@ class ResolvedActionSchedule:
     skip_reason: str | None = None
 
 
-def resolve_enabled_template(*, team_id: int | None, channel: str, event_name: str) -> MessageTemplate | None:
-    if team_id is None:
-        return None
-
-    return (
-        db.session.query(MessageTemplate)
-        .filter(
-            MessageTemplate.team_id == team_id,
-            MessageTemplate.channel == channel,
-            MessageTemplate.event == event_name,
-            MessageTemplate.enable.is_(True),
-        )
-        .first()
-    )
-
-
 def resolve_order_action_schedule(order_event, action_name: str) -> ResolvedActionSchedule | None:
     channel = _resolve_channel(action_name)
-    template = resolve_enabled_template(
+    template = resolve_message_template(
         team_id=getattr(order_event, "team_id", None),
         channel=channel,
         event_name=order_event.event_name,
+        plan_type=resolve_order_message_plan_type(getattr(order_event, "order", None)),
+        enabled_only=True,
     )
     if template is None:
         return None
@@ -67,10 +56,13 @@ def resolve_order_action_schedule(order_event, action_name: str) -> ResolvedActi
 
 def resolve_route_plan_action_schedule(plan_event, action_name: str) -> ResolvedActionSchedule | None:
     channel = _resolve_channel(action_name)
-    template = resolve_enabled_template(
+    route_plan = getattr(plan_event, "route_plan", None) or getattr(plan_event, "plan", None)
+    template = resolve_message_template(
         team_id=getattr(plan_event, "team_id", None),
         channel=channel,
         event_name=plan_event.event_name,
+        plan_type=resolve_route_plan_message_plan_type(route_plan),
+        enabled_only=True,
     )
     if template is None:
         return None

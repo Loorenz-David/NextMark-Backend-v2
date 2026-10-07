@@ -8,22 +8,17 @@ from Delivery_app_BK.services.domain.order.shopify import (
 )
 from Delivery_app_BK.services.infra.events.handlers.order._actions import run_immediate_action
 from Delivery_app_BK.services.infra.jobs import enqueue_job
-from Delivery_app_BK.services.infra.tasks.order.fulfill_shopify_order import (
-    fulfill_shopify_order,
-)
-from Delivery_app_BK.services.infra.tasks.order.notify_order_schedule_action import (
-    notify_order_schedule_action,
-)
-from Delivery_app_BK.services.infra.tasks.order.push_external_schedule_action import (
-    push_external_schedule_action,
-)
-from Delivery_app_BK.services.infra.tasks.order.sync_shopify import sync_shopify
+
+# Task modules import command packages that import this events package back,
+# so the two jobs enqueued directly here are imported at call time.
 
 
 logger = logging.getLogger(__name__)
 
 
 def sync_shopify_fulfillment_on_order_completed(order_event) -> None:
+    from Delivery_app_BK.services.infra.tasks.order.fulfill_shopify_order import fulfill_shopify_order
+
     order = getattr(order_event, "order", None)
     if order is None:
         order = db.session.get(Order, getattr(order_event, "order_id", None))
@@ -41,6 +36,8 @@ def sync_shopify_fulfillment_on_order_completed(order_event) -> None:
 
 
 def sync_shopify_costumer_on_client_form_submitted(order_event) -> None:
+    from Delivery_app_BK.services.infra.tasks.order.sync_shopify import sync_shopify
+
     event_order_id = getattr(order_event, "order_id", None)
     logger.info(
         "[shopify-costumer-sync] handler fired event_name=%s order_id=%s",
@@ -131,7 +128,6 @@ def push_external_schedule_on_delivery_rescheduled(order_event) -> None:
     run_immediate_action(
         order_event,
         "order_external_schedule_push",
-        push_external_schedule_action,
     )
 
 
@@ -152,7 +148,6 @@ def push_external_schedule_on_delivery_plan_unassigned(order_event) -> None:
     run_immediate_action(
         order_event,
         "order_external_schedule_push",
-        push_external_schedule_action,
         action_scope="unassigned",
     )
 
@@ -170,7 +165,6 @@ def _fan_out_schedule_notification(order_event, order: Order, scheduled_date: st
         run_immediate_action(
             order_event,
             "order_schedule_notify",
-            notify_order_schedule_action,
             action_scope=f"target:{target.id}",
             payload={
                 "target_id": target.id,

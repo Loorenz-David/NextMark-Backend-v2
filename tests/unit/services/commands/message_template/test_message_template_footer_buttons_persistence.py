@@ -74,6 +74,7 @@ def test_create_message_template_preserves_footer_buttons(monkeypatch):
                     ],
                 },
                 "channel": "email",
+                "plan_type": "local_delivery",
                 "schedule_offset_value": None,
                 "schedule_offset_unit": None,
             }
@@ -107,6 +108,10 @@ def test_update_message_template_preserves_footer_buttons(monkeypatch):
     monkeypatch.setattr(
         "Delivery_app_BK.services.commands.message_template.update_message_template.validate_schedule_configuration",
         lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "Delivery_app_BK.services.commands.message_template.update_message_template.db.session.flush",
+        lambda: None,
     )
     monkeypatch.setattr(
         "Delivery_app_BK.services.commands.message_template.update_message_template.db.session.commit",

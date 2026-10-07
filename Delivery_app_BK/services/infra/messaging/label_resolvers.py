@@ -225,6 +225,16 @@ def _resolve_tracking_link(context: MessageRenderContext, channel: str) -> str:
     return _to_string(getattr(context.order, "tracking_link", None))
 
 
+# Third-party courier tracking entered on the order (or synced from Shopify),
+# as opposed to the system-generated tracking_number / tracking_link above.
+def _resolve_external_tracking_number(context: MessageRenderContext, channel: str) -> str:
+    return _to_string(getattr(context.order, "external_tracking_number", None)).strip()
+
+
+def _resolve_external_tracking_link(context: MessageRenderContext, channel: str) -> str:
+    return _to_string(getattr(context.order, "external_tracking_link", None)).strip()
+
+
 def _resolve_client_form_link(context: MessageRenderContext, channel: str) -> str:
     return _to_string(context.extra_context.get("client_form_link"))
 
@@ -405,6 +415,8 @@ LABEL_RESOLVER_REGISTRY: dict[str, LabelResolver] = {
     "client_last_name": _resolve_client_last_name,
     "tracking_number": _resolve_tracking_number,
     "tracking_link": _resolve_tracking_link,
+    "external_tracking_number": _resolve_external_tracking_number,
+    "external_tracking_link": _resolve_external_tracking_link,
     "client_form_link": _resolve_client_form_link,
     "driver_phone": _resolve_driver_phone,
 

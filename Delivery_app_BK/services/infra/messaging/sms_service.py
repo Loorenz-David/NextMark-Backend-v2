@@ -18,27 +18,17 @@ def _load_team_twilio(team_id: int | None) -> TwilioMod | None:
     )
 
 
-def resolve_template(team_id: int, channel: str, event_name: str) -> MessageTemplate | None:
-    return (
-        db.session.query(MessageTemplate)
-        .filter(
-            MessageTemplate.team_id == team_id,
-            MessageTemplate.channel == channel,
-            MessageTemplate.event == event_name,
-        )
-        .first()
-    )
-
-
 def send_sms_message(
     *,
     team_id: int,
+    template: MessageTemplate,
     recipient_phone: str,
     event_name: str,
     render_context: MessageRenderContext,
 ) -> None:
     errors = send_sms_batch(
         team_id=team_id,
+        template=template,
         recipients=[(0, recipient_phone, render_context)],
         event_name=event_name,
     )
@@ -50,9 +40,14 @@ def send_sms_message(
 def send_sms_batch(
     *,
     team_id: int,
+    template: MessageTemplate,
     recipients: list[tuple[int, str, MessageRenderContext]],
     event_name: str,
 ) -> dict[int, str]:
+    """
+    The caller resolves and validates the template (event, channel and plan
+    type) before calling; this layer only renders and sends it.
+    """
     if not recipients:
         return {}
 
@@ -62,10 +57,6 @@ def send_sms_batch(
 
     sms_provider = build_sms_provider(twilio_integration)
     sms_provider.validate_connection()
-
-    template = resolve_template(team_id=team_id, channel="sms", event_name=event_name)
-    if template is None or not bool(template.enable):
-        return {}
 
     recipient_errors: dict[int, str] = {}
     for order_id, raw_recipient, render_context in recipients:

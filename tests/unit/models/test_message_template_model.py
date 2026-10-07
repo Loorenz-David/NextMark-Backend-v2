@@ -89,3 +89,37 @@ def test_message_template_accepts_client_form_submitted_event():
     template.event = OrderEvent.CLIENT_FORM_SUBMITTED.value
 
     assert template.event == "client_form_submitted"
+
+
+@pytest.mark.parametrize("plan_type", ["local_delivery", "store_pickup", "international_shipping"])
+def test_message_template_accepts_every_planning_domain(plan_type):
+    template = MessageTemplate()
+
+    template.plan_type = plan_type
+
+    assert template.plan_type == plan_type
+
+
+def test_message_template_rejects_unknown_plan_type():
+    template = MessageTemplate()
+
+    with pytest.raises(ValidationFailed, match="Invalid plan_type"):
+        template.plan_type = "pickup"
+
+
+def test_message_template_rejects_none_plan_type():
+    template = MessageTemplate()
+
+    with pytest.raises(ValidationFailed, match="Invalid plan_type"):
+        template.plan_type = None
+
+
+def test_message_template_is_unique_per_team_event_channel_and_plan_type():
+    constraint = next(
+        c
+        for c in MessageTemplate.__table__.constraints
+        if c.name == "uq_message_template_team_event_channel_plan_type"
+    )
+
+    assert [column.name for column in constraint.columns] == ["team_id", "event", "channel", "plan_type"]
+    assert not any(c.name == "uq_message_template_team_event_channel" for c in MessageTemplate.__table__.constraints)

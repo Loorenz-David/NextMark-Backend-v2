@@ -86,11 +86,10 @@ def test_notify_schedule_targets_on_order_created_enqueues_one_job_per_active_ta
     monkeypatch.setattr(
         module,
         "run_immediate_action",
-        lambda order_event_arg, action_name, runner, **kwargs: calls.append(
+        lambda order_event_arg, action_name, **kwargs: calls.append(
             {
                 "order_event": order_event_arg,
                 "action_name": action_name,
-                "runner": runner,
                 **kwargs,
             }
         ),
@@ -146,11 +145,10 @@ def test_notify_schedule_targets_on_delivery_rescheduled_uses_new_plan_start_dat
     monkeypatch.setattr(
         module,
         "run_immediate_action",
-        lambda order_event_arg, action_name, runner, **kwargs: calls.append(
+        lambda order_event_arg, action_name, **kwargs: calls.append(
             {
                 "order_event": order_event_arg,
                 "action_name": action_name,
-                "runner": runner,
                 **kwargs,
             }
         ),
@@ -187,11 +185,10 @@ def test_push_external_schedule_on_delivery_rescheduled_enqueues_action(monkeypa
     monkeypatch.setattr(
         module,
         "run_immediate_action",
-        lambda order_event_arg, action_name, runner, **kwargs: calls.append(
+        lambda order_event_arg, action_name, **kwargs: calls.append(
             {
                 "order_event": order_event_arg,
                 "action_name": action_name,
-                "runner": runner,
                 **kwargs,
             }
         ),
@@ -212,11 +209,10 @@ def test_push_external_schedule_on_delivery_plan_unassigned_enqueues_action(monk
     monkeypatch.setattr(
         module,
         "run_immediate_action",
-        lambda order_event_arg, action_name, runner, **kwargs: calls.append(
+        lambda order_event_arg, action_name, **kwargs: calls.append(
             {
                 "order_event": order_event_arg,
                 "action_name": action_name,
-                "runner": runner,
                 **kwargs,
             }
         ),
@@ -238,7 +234,7 @@ def test_push_external_schedule_on_delivery_plan_unassigned_skips_when_still_ass
     monkeypatch.setattr(
         module,
         "run_immediate_action",
-        lambda order_event_arg, action_name, runner, **kwargs: calls.append({"action_name": action_name}),
+        lambda order_event_arg, action_name, **kwargs: calls.append({"action_name": action_name}),
     )
 
     module.push_external_schedule_on_delivery_plan_unassigned(order_event)

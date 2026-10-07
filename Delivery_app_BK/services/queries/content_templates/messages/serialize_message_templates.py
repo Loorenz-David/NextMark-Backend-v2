@@ -19,6 +19,7 @@ def serialize_message_templates(instances: List[MessageTemplate], ctx: ServiceCo
             "ask_permission": instance.ask_permission,
             "name":instance.name,
             "channel": instance.channel,
+            "plan_type": instance.plan_type,
             "schedule_offset_value": instance.schedule_offset_value,
             "schedule_offset_unit": instance.schedule_offset_unit,
         }
@@ -38,6 +39,7 @@ def serialize_message_templates_bootstrap(instances: List[MessageTemplate], ctx:
             "subject": instance.subject,
             "ask_permission": instance.ask_permission,
             "channel": instance.channel,
+            "plan_type": instance.plan_type,
             "schedule_offset_value": instance.schedule_offset_value,
             "schedule_offset_unit": instance.schedule_offset_unit,
         }

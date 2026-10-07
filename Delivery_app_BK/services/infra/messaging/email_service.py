@@ -116,18 +116,6 @@ def _build_subject(
     return event_name.replace("_", " ").title()
 
 
-def resolve_template(team_id: int, channel: str, event_name: str) -> MessageTemplate | None:
-    return (
-        db.session.query(MessageTemplate)
-        .filter(
-            MessageTemplate.team_id == team_id,
-            MessageTemplate.channel == channel,
-            MessageTemplate.event == event_name,
-        )
-        .first()
-    )
-
-
 def _load_base_email_template() -> str:
     template_path = Path(__file__).resolve().parent.parent / "tasks" / "order" / HTML_TEMPLATE_FILE
     if not template_path.exists():
@@ -272,12 +260,14 @@ def _render_email_html(template_value: Any, render_context: MessageRenderContext
 def send_email_message(
     *,
     team_id: int,
+    template: MessageTemplate,
     recipient: str,
     event_name: str,
     render_context: MessageRenderContext,
 ) -> None:
     errors = send_email_batch(
         team_id=team_id,
+        template=template,
         recipients=[(0, recipient, render_context)],
         event_name=event_name,
     )
@@ -305,19 +295,20 @@ def _build_email_message(
 def send_email_batch(
     *,
     team_id: int,
+    template: MessageTemplate,
     recipients: list[tuple[int, str, MessageRenderContext]],
     event_name: str,
 ) -> dict[int, str]:
+    """
+    The caller resolves and validates the template (event, channel and plan
+    type) before calling; this layer only renders and sends it.
+    """
     if not recipients:
         return {}
 
     smtp_config = _load_team_smtp(team_id)
     if smtp_config is None:
         raise RuntimeError("No SMTP configuration for team")
-
-    template = resolve_template(team_id=team_id, channel="email", event_name=event_name)
-    if template is None or not bool(template.enable):
-        return {}
 
     smtp_client: smtplib.SMTP | None = None
     recipient_errors: dict[int, str] = {}

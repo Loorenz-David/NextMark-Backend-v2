@@ -60,6 +60,8 @@ def emit_order_message_dispatched(
     requested_by: int | None,
     orders: list[dict[str, Any]],
     not_found_order_ids: list[int],
+    plan_types: dict[str, list[str]] | None = None,
+    skipped_orders: list[dict[str, Any]] | None = None,
 ) -> None:
     total_actions = sum(len(order.get("actions") or []) for order in orders)
 
@@ -73,10 +75,14 @@ def emit_order_message_dispatched(
             "request_id": request_id,
             "template_event": template_event,
             "channels": list(channels),
+            # Per plan type, which channels had an enabled template. `channels`
+            # above is the union, kept for clients that predate the breakdown.
+            "plan_types": {key: list(value) for key, value in (plan_types or {}).items()},
             "requested_by": requested_by,
             "total_actions": total_actions,
             "orders": orders,
             "not_found_order_ids": list(not_found_order_ids),
+            "skipped_orders": list(skipped_orders or []),
             "notification_preview": {
                 "kind": BUSINESS_EVENT_ORDER_MESSAGE_DISPATCHED,
                 "title": "Messages queued",

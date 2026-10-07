@@ -35,8 +35,9 @@ message_template_bp = Blueprint("api_v2_message_template_bp", __name__)
 @role_required([ADMIN, ASSISTANT])
 def list_message_templates():
     identity = get_jwt()
+    # MultiDict, not a plain dict: the query reads `plan_type[]` via getlist.
     ctx = ServiceContext(
-        query_params=request.args.to_dict(),
+        query_params=request.args,
         identity=identity,
     )
     outcome = run_service(lambda c: list_message_templates_service(c), ctx)

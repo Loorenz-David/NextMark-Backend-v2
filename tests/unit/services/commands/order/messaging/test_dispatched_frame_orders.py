@@ -11,6 +11,7 @@ RESULTS = [
     {
         "order_id": 12,
         "status": "accepted",
+        "plan_type": "store_pickup",
         "event_id": 9912,
         "source_event_id": None,
         "channels": {
@@ -21,6 +22,7 @@ RESULTS = [
     {
         "order_id": 15,
         "status": "accepted",
+        "plan_type": "local_delivery",
         "event_id": 9913,
         "source_event_id": None,
         "channels": {
@@ -28,13 +30,26 @@ RESULTS = [
         },
     },
     {"order_id": 88, "status": "not_found"},
+    {
+        "order_id": 91,
+        "status": "skipped",
+        "plan_type": "international_shipping",
+        "detail": "No enabled template for event 'order_ready' on channels ['email'] for plan type 'international_shipping'.",
+    },
 ]
 
 
 def test_only_accepted_orders_reach_the_frame():
+    # Both not_found and plan-type-skipped orders are reported elsewhere on the frame.
     frame_orders = _build_dispatched_frame_orders(RESULTS)
 
     assert [order["order_id"] for order in frame_orders] == [12, 15]
+
+
+def test_frame_orders_carry_their_plan_type():
+    frame_orders = _build_dispatched_frame_orders(RESULTS)
+
+    assert [order["plan_type"] for order in frame_orders] == ["store_pickup", "local_delivery"]
 
 
 def test_skipped_channels_produce_no_action_entry():

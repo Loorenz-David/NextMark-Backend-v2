@@ -5,12 +5,15 @@ from typing import Any
 
 from Delivery_app_BK.models import OrderEventAction, db
 from Delivery_app_BK.services.commands.order.client_form.generate_token import get_existing_client_form_url
-from Delivery_app_BK.services.domain.messaging import SCHEDULE_ANCHOR_FUTURE_BUSINESS_TIME
+from Delivery_app_BK.services.domain.messaging import (
+    SCHEDULE_ANCHOR_FUTURE_BUSINESS_TIME,
+    resolve_order_message_plan_type,
+)
 from Delivery_app_BK.services.infra.events.realtime_refresh import notify_order_action_changed
 from Delivery_app_BK.services.infra.messaging import MessageRenderContext
-from Delivery_app_BK.services.infra.messaging import resolve_sms_template
 from Delivery_app_BK.services.infra.messaging.action_scheduling import resolve_current_order_future_anchor
 from Delivery_app_BK.services.infra.messaging.sms_service import send_sms_message
+from Delivery_app_BK.services.infra.messaging.template_resolver import resolve_message_template
 
 
 def _truncate_error(error_message: str) -> str:
@@ -161,10 +164,20 @@ def send_sms(action_id: int) -> None:
             _mark_action_failed(action, "Missing team context for SMS send")
             return
 
+        order = action.event.order
         template_event_name = _resolve_template_event_name(action)
-        template = resolve_sms_template(team_id=team_id, channel="sms", event_name=template_event_name)
+        plan_type = resolve_order_message_plan_type(order)
+        template = resolve_message_template(
+            team_id=team_id,
+            channel="sms",
+            event_name=template_event_name,
+            plan_type=plan_type,
+        )
         if template is None or not bool(template.enable):
-            _mark_action_skipped(action, "SMS template is missing or disabled at execution time")
+            _mark_action_skipped(
+                action,
+                f"SMS template is missing or disabled for plan type '{plan_type}' at execution time",
+            )
             return
 
         if action.schedule_anchor_type == SCHEDULE_ANCHOR_FUTURE_BUSINESS_TIME:
@@ -176,7 +189,6 @@ def send_sms(action_id: int) -> None:
                 _mark_action_skipped(action, "Future business anchor changed after the action was scheduled")
                 return
 
-        order = action.event.order
         recipient_phone = _extract_sms_override(action) or _resolve_recipient_phone(order)
         if not recipient_phone:
             _mark_action_failed(action, "Order has no valid recipient phone number")
@@ -197,6 +209,7 @@ def send_sms(action_id: int) -> None:
 
         send_sms_message(
             team_id=team_id,
+            template=template,
             recipient_phone=recipient_phone,
             event_name=template_event_name,
             render_context=render_context,

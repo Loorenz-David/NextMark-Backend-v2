@@ -10,14 +10,12 @@ def test_client_form_submitted_email_uses_expected_action(monkeypatch):
     monkeypatch.setattr(
         order_email,
         "run_action",
-        lambda received_event, action_name, runner: calls.append(
-            (received_event, action_name, runner)
-        ),
+        lambda received_event, action_name: calls.append((received_event, action_name)),
     )
 
     order_email.send_email_on_client_form_submitted(event)
 
-    assert calls == [(event, "client_form_submitted_email", order_email.send_email)]
+    assert calls == [(event, "client_form_submitted_email")]
 
 
 def test_client_form_submitted_sms_uses_expected_action(monkeypatch):
@@ -26,14 +24,12 @@ def test_client_form_submitted_sms_uses_expected_action(monkeypatch):
     monkeypatch.setattr(
         order_sms,
         "run_action",
-        lambda received_event, action_name, runner: calls.append(
-            (received_event, action_name, runner)
-        ),
+        lambda received_event, action_name: calls.append((received_event, action_name)),
     )
 
     order_sms.send_sms_on_client_form_submitted(event)
 
-    assert calls == [(event, "client_form_submitted_sms", order_sms.send_sms)]
+    assert calls == [(event, "client_form_submitted_sms")]
 
 
 def test_client_form_submitted_registers_independent_sms_and_email_handlers():

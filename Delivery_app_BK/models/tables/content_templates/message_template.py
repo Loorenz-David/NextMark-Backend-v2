@@ -13,6 +13,7 @@ from Delivery_app_BK.models.mixins.team_mixings.team_id import TeamScopedMixin
 from Delivery_app_BK.models.utils import UTCDateTime
 from Delivery_app_BK.services.domain.messaging import (
     ALLOWED_SCHEDULE_OFFSET_UNITS,
+    validate_message_plan_type,
     validate_schedule_configuration,
 )
 from Delivery_app_BK.services.domain.order.order_events import OrderEvent
@@ -25,7 +26,8 @@ class MessageTemplate(db.Model, TeamScopedMixin):
             "team_id",
             "event",
             "channel",
-            name="uq_message_template_team_event_channel"
+            "plan_type",
+            name="uq_message_template_team_event_channel_plan_type"
         ),
     )
 
@@ -38,6 +40,9 @@ class MessageTemplate(db.Model, TeamScopedMixin):
     name = Column(String)
     ask_permission = Column(Boolean, default=False)
     channel = Column(String, nullable=False)
+    # Which planning domain this template serves. A team owns one template per
+    # (event, channel, plan_type), so pickup and delivery wording can differ.
+    plan_type = Column(String, nullable=False, index=True)
     schedule_offset_value = Column(Integer, nullable=True)
     schedule_offset_unit = Column(String, nullable=True)
 
@@ -61,6 +66,10 @@ class MessageTemplate(db.Model, TeamScopedMixin):
             )
         return value
     
+
+    @validates("plan_type")
+    def validate_plan_type(self, key, value):
+        return validate_message_plan_type(value)
 
     @validates("event")
     def validate_event(self, key, value):
