@@ -31,6 +31,14 @@ from Delivery_app_BK.services.commands.order.update_extensions import (
     build_order_update_extension_context,
 )
 from Delivery_app_BK.services.context import ServiceContext
+from Delivery_app_BK.services.domain.order.audit import (
+    diff_order_audit_values,
+    snapshot_order_audit_values,
+)
+from Delivery_app_BK.services.infra.audit import (
+    new_audit_event_id,
+    record_order_audit_changes,
+)
 from Delivery_app_BK.services.infra.events.builders.order import (
     build_client_form_submitted_event,
     build_order_edited_event,
@@ -46,6 +54,7 @@ ALLOWED_CLIENT_FIELDS = {
     "client_address",
     "marketing_messages"
 }
+AUDIT_FIELDS = (*sorted(ALLOWED_CLIENT_FIELDS), "order_notes")
 
 
 def submit_client_form(token: str, payload: dict) -> dict:
@@ -57,6 +66,7 @@ def submit_client_form(token: str, payload: dict) -> dict:
 
     # Sanitize — only write allowed fields
     safe_payload = {k: v for k, v in payload.items() if k in ALLOWED_CLIENT_FIELDS}
+    audit_before = snapshot_order_audit_values(order, fields=AUDIT_FIELDS)
 
     for field, value in safe_payload.items():
         setattr(order, field, value)
@@ -82,6 +92,23 @@ def submit_client_form(token: str, payload: dict) -> dict:
         order.accepted_terms_version_id = accepted_terms.id
         order.terms_accepted_at = submitted_at
 
+    # The client is not a user, so the event and its audit rows carry no actor.
+    system_ctx = ServiceContext(identity={"team_id": order.team_id, "active_team_id": order.team_id})
+    # The customer's changes belong to their submission; the companion edit
+    # event only carries the realtime "order updated" frame.
+    submitted_event = build_client_form_submitted_event(order)
+    submitted_event["event_id"] = new_audit_event_id()
+    record_order_audit_changes(
+        system_ctx,
+        order_id=order.id,
+        team_id=order.team_id,
+        event_id=submitted_event["event_id"],
+        changes=diff_order_audit_values(
+            audit_before,
+            snapshot_order_audit_values(order, fields=AUDIT_FIELDS),
+        ),
+    )
+
     db.session.commit()
 
     # If the customer updated the delivery address, recompute downstream stop ETAs
@@ -105,13 +132,13 @@ def submit_client_form(token: str, payload: dict) -> dict:
             db.session.commit()
 
     emit_order_events(
-        ServiceContext(identity={"team_id": order.team_id, "active_team_id": order.team_id}),
+        system_ctx,
         [
             build_order_edited_event(
                 order,
                 changed_sections=["client_form_submission"],
             ),
-            build_client_form_submitted_event(order),
+            submitted_event,
         ],
     )
 

@@ -29,7 +29,15 @@ from Delivery_app_BK.services.commands.costumer.default_rows import (
 )
 from Delivery_app_BK.services.context import ServiceContext
 from Delivery_app_BK.services.domain.order.order_states import OrderState as OrderStateName
+from Delivery_app_BK.services.domain.order.audit import (
+    diff_order_audit_values,
+    snapshot_order_audit_values,
+)
 from Delivery_app_BK.services.domain.plan.route_freshness import touch_route_freshness
+from Delivery_app_BK.services.infra.audit import (
+    new_audit_event_id,
+    record_order_audit_changes,
+)
 from Delivery_app_BK.services.infra.events.builders.order import build_order_edited_event
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
 from Delivery_app_BK.services.queries.integration_shopify import get_integration_by_shop
@@ -44,6 +52,13 @@ TERMINAL_STATE_NAMES = {
     OrderStateName.FAIL.value,
     OrderStateName.CANCELLED.value,
 }
+CASCADED_ORDER_FIELDS = (
+    "client_first_name",
+    "client_last_name",
+    "client_email",
+    "client_primary_phone",
+    "client_address",
+)
 
 
 def apply_shopify_customer_update(shop: str, payload: dict) -> None:
@@ -95,7 +110,9 @@ def apply_shopify_customer_update(shop: str, payload: dict) -> None:
         return
 
     _apply_costumer_changes(costumer, incoming, changes, team_id)
-    updated_orders = _cascade_to_active_orders(costumer, incoming, changes, team_id)
+    ctx = ServiceContext(identity={"team_id": team_id, "active_team_id": team_id})
+    event_id_by_order_id = _cascade_to_active_orders(ctx, costumer, incoming, changes, team_id)
+    updated_orders = list(event_id_by_order_id.keys())
     db.session.add(costumer)
     db.session.commit()
 
@@ -108,12 +125,14 @@ def apply_shopify_customer_update(shop: str, payload: dict) -> None:
 
     # Loop-breaker #2: EDITED only — no CLIENT_FORM_SUBMITTED, so no push back out.
     if updated_orders:
-        ctx = ServiceContext(identity={"team_id": team_id, "active_team_id": team_id})
         emit_order_events(
             ctx,
             [
-                build_order_edited_event(order, changed_sections=["shopify_customer_sync"])
-                for order in updated_orders
+                {
+                    **build_order_edited_event(order, changed_sections=["shopify_customer_sync"]),
+                    "event_id": event_id,
+                }
+                for order, event_id in event_id_by_order_id.items()
             ],
         )
 
@@ -170,11 +189,14 @@ def _apply_costumer_changes(
 
 
 def _cascade_to_active_orders(
+    ctx: ServiceContext,
     costumer: Costumer,
     incoming: dict[str, Any],
     changes: set[str],
     team_id: int,
-) -> list[Order]:
+) -> dict[Order, str]:
+    """Push the costumer changes onto its open orders and stage each order's
+    audit rows. Returns the event id each order's edit event must carry."""
     orders = (
         db.session.query(Order)
         .join(OrderState, Order.order_state_id == OrderState.id)
@@ -186,7 +208,9 @@ def _cascade_to_active_orders(
         .all()
     )
 
+    event_id_by_order: dict[Order, str] = {}
     for order in orders:
+        audit_before = snapshot_order_audit_values(order, fields=CASCADED_ORDER_FIELDS)
         if "first_name" in changes:
             order.client_first_name = incoming["first_name"]
         if "last_name" in changes:
@@ -203,7 +227,20 @@ def _cascade_to_active_orders(
                 touch_route_freshness(delivery_plan)
         db.session.add(order)
 
-    return orders
+        event_id = new_audit_event_id()
+        record_order_audit_changes(
+            ctx,
+            order_id=order.id,
+            team_id=team_id,
+            event_id=event_id,
+            changes=diff_order_audit_values(
+                audit_before,
+                snapshot_order_audit_values(order, fields=CASCADED_ORDER_FIELDS),
+            ),
+        )
+        event_id_by_order[order] = event_id
+
+    return event_id_by_order
 
 
 def _resolve_changed_address(costumer: Costumer, payload: dict) -> dict[str, Any] | None:

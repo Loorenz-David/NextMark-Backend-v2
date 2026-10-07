@@ -7,6 +7,14 @@ from typing import Any
 from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.models import Order, db
 from Delivery_app_BK.services.context import ServiceContext
+from Delivery_app_BK.services.domain.order.audit import (
+    diff_order_audit_values,
+    snapshot_order_audit_values,
+)
+from Delivery_app_BK.services.infra.audit import (
+    new_audit_event_id,
+    record_order_audit_changes,
+)
 from Delivery_app_BK.services.infra.events.builders.order import build_order_edited_event
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
 from Delivery_app_BK.services.queries.get_instance import get_instance
@@ -14,6 +22,7 @@ from Delivery_app_BK.services.queries.get_instance import get_instance
 
 EDITABLE_NOTE_TYPES = {"GENERAL", "COSTUMER"}
 SUPPORTED_ACTIONS = {"update", "delete"}
+NOTE_AUDIT_FIELDS = ("order_notes",)
 
 
 def update_order_notes(ctx: ServiceContext, action: str) -> dict:
@@ -28,6 +37,7 @@ def update_order_notes(ctx: ServiceContext, action: str) -> dict:
     )
     note_payload = _validate_note_payload(payload.get("order_notes"))
     current_notes = _normalize_notes_list(getattr(order, "order_notes", None))
+    audit_before = snapshot_order_audit_values(order, fields=NOTE_AUDIT_FIELDS)
 
     if action == "update":
         updated_notes = _update_note(current_notes, note_payload)
@@ -35,18 +45,25 @@ def update_order_notes(ctx: ServiceContext, action: str) -> dict:
         updated_notes = _delete_note(current_notes, note_payload)
 
     order.order_notes = updated_notes
+    edit_event = build_order_edited_event(
+        order,
+        changed_sections=["details"],
+    )
+    edit_event["event_id"] = new_audit_event_id()
+    record_order_audit_changes(
+        ctx,
+        order_id=order.id,
+        team_id=order.team_id,
+        event_id=edit_event["event_id"],
+        changes=diff_order_audit_values(
+            audit_before,
+            snapshot_order_audit_values(order, fields=NOTE_AUDIT_FIELDS),
+        ),
+    )
     db.session.add(order)
     db.session.commit()
 
-    emit_order_events(
-        ctx,
-        [
-            build_order_edited_event(
-                order,
-                changed_sections=["details"],
-            )
-        ],
-    )
+    emit_order_events(ctx, [edit_event])
 
     return {"order_notes": list(order.order_notes or [])}
 

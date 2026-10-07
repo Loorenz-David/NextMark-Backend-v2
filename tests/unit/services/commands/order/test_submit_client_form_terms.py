@@ -8,6 +8,17 @@ from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.services.commands.order.client_form import submit_client_form as module
 
 
+@pytest.fixture(autouse=True)
+def audit_records(monkeypatch):
+    recorded: list[dict] = []
+    monkeypatch.setattr(
+        module,
+        "record_order_audit_changes",
+        lambda _ctx, **kwargs: recorded.append(kwargs),
+    )
+    return recorded
+
+
 def _order():
     return SimpleNamespace(
         id=42,

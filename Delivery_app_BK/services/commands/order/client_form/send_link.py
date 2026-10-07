@@ -7,11 +7,20 @@ from Delivery_app_BK.services.commands.order.client_form.generate_token import g
 from Delivery_app_BK.services.context import ServiceContext
 from Delivery_app_BK.services.domain.order.order_events import OrderEvent
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
+from Delivery_app_BK.services.domain.order.audit import (
+    diff_order_audit_values,
+    snapshot_order_audit_values,
+)
+from Delivery_app_BK.services.infra.audit import (
+    new_audit_event_id,
+    record_order_audit_changes,
+)
 from Delivery_app_BK.services.infra.messaging.label_resolvers import phone_to_string
 
 
 CLIENT_FORM_LINK_EVENT = OrderEvent.CLIENT_FORM_LINK_SENT.value
 SUPPORTED_CLIENT_FORM_CHANNELS = {"email", "sms"}
+RECIPIENT_AUDIT_FIELDS = ("client_email", "client_primary_phone")
 
 
 def _build_result(status: str, *, detail: str | None = None, recipient: str | None = None) -> dict[str, str]:
@@ -138,12 +147,20 @@ def _persist_recipient_overrides_to_order(order: object, recipients: dict[str, A
         setattr(order, "client_primary_phone", sms_value)
 
 
-def _emit_client_form_link_event(*, order_id: int, team_id: int, identity: dict[str, Any], payload: dict[str, Any]) -> None:
+def _emit_client_form_link_event(
+    *,
+    order_id: int,
+    team_id: int,
+    identity: dict[str, Any],
+    payload: dict[str, Any],
+    event_id: str,
+) -> None:
     ctx = ServiceContext(identity=identity)
     emit_order_events(
         ctx,
         [
             {
+                "event_id": event_id,
                 "order_id": order_id,
                 "event_name": CLIENT_FORM_LINK_EVENT,
                 "team_id": team_id,
@@ -168,7 +185,21 @@ def send_client_form_link(
 
     result = get_or_generate_client_form_token(order_id, team_id)
     form_url = f"{base_url}/form/{result['raw_token']}"
+    event_id = new_audit_event_id()
+    audit_before = snapshot_order_audit_values(result["order"], fields=RECIPIENT_AUDIT_FIELDS)
     _persist_recipient_overrides_to_order(result["order"], recipients)
+    # Staged on the session; committed by the link event emission below, the
+    # same commit that persists the overrides themselves.
+    record_order_audit_changes(
+        ServiceContext(identity=identity),
+        order_id=order_id,
+        team_id=team_id,
+        event_id=event_id,
+        changes=diff_order_audit_values(
+            audit_before,
+            snapshot_order_audit_values(result["order"], fields=RECIPIENT_AUDIT_FIELDS),
+        ),
+    )
     send_results = send_client_form_link_messages(
         order=result["order"],
         form_url=form_url,
@@ -183,6 +214,7 @@ def send_client_form_link(
         team_id=team_id,
         identity=identity,
         payload=event_payload,
+        event_id=event_id,
     )
 
     return {

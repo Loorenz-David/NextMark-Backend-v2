@@ -35,8 +35,22 @@ from Delivery_app_BK.services.infra.events.builders.order import (
     build_client_form_submitted_event,
     build_delivery_window_rescheduled_by_user_event,
     build_order_edited_event,
+    mark_client_form_submission,
 )
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
+from Delivery_app_BK.services.domain.order.order_events import (
+    CLIENT_FORM_SUBMISSION_SOURCES,
+    ORDER_EDIT_SECTION_CLIENT_FORM,
+    ORDER_EDIT_SECTION_CUSTOMER,
+)
+from Delivery_app_BK.services.infra.audit import (
+    new_audit_event_id,
+    record_order_audit_changes,
+)
+from Delivery_app_BK.services.domain.order.audit import (
+    diff_order_audit_values,
+    snapshot_order_audit_values,
+)
 from Delivery_app_BK.services.domain.order.plan_objective_labels import (
     normalize_order_plan_objective,
 )
@@ -113,6 +127,7 @@ def update_order(ctx: ServiceContext):
     ctx.set_relationship_map({"accepted_terms_version_id": ClientFormTermsVersion})
     targets = extract_targets(ctx)
     _extract_costumer_update_flags(targets)
+    _extract_submission_sources(targets)
     _validate_targets_update_fields(targets)
     _apply_terms_acceptance(ctx, targets)
 
@@ -210,6 +225,7 @@ def apply_order_updates(
             team_timezone=team_timezone,
         )
 
+        audit_before = snapshot_order_audit_values(existing)
         old_values = _capture_sync_values(existing)
         old_driver_visible_values = _capture_driver_visible_values(existing)
         _old_windows = list(existing.delivery_windows or [])
@@ -228,6 +244,10 @@ def apply_order_updates(
         if order_target.get("update_costumer"):
             apply_order_client_fields_to_costumer(existing, raw_fields)
 
+        submission_source = order_target.get("submission_source")
+        if submission_source is not None:
+            existing.client_form_submitted_at = datetime.now(timezone.utc)
+
         new_values = _capture_sync_values(existing)
         new_driver_visible_values = _capture_driver_visible_values(existing)
         _new_windows = list(existing.delivery_windows or [])
@@ -241,27 +261,21 @@ def apply_order_updates(
             old_values=old_driver_visible_values,
             new_values=new_driver_visible_values,
         )
-        if changed_sections:
-            if "schedule" in changed_sections:
-                pending_events.append(
-                    build_delivery_window_rescheduled_by_user_event(
-                        order_instance=existing,
-                        old_earliest=old_earliest,
-                        old_latest=old_latest,
-                        new_earliest=new_earliest,
-                        new_latest=new_latest,
-                        changed_sections=list(changed_sections),
-                    )
-                )
-            else:
-                pending_events.append(
-                    build_order_edited_event(
-                        order_instance=existing,
-                        changed_sections=list(changed_sections),
-                    )
-                )
-        if customer_fields_changed:
-            pending_events.append(build_client_form_submitted_event(existing))
+        audit_changes = diff_order_audit_values(
+            audit_before,
+            snapshot_order_audit_values(existing),
+        )
+        pending_events.extend(
+            _build_order_update_events(
+                ctx,
+                order=existing,
+                changed_sections=changed_sections,
+                customer_fields_changed=customer_fields_changed,
+                audit_changes=audit_changes,
+                submission_source=submission_source,
+                window_bounds=(old_earliest, old_latest, new_earliest, new_latest),
+            )
+        )
 
         flags = _build_change_flags(old_values, new_values, fields_to_apply)
         order_deltas.append(
@@ -277,6 +291,92 @@ def apply_order_updates(
         updated_orders.append(existing)
 
     return updated_orders, pending_events, order_deltas
+
+
+def _build_order_update_events(
+    ctx: ServiceContext,
+    *,
+    order: Order,
+    changed_sections: tuple[str, ...],
+    customer_fields_changed: bool,
+    audit_changes: list,
+    submission_source: str | None,
+    window_bounds: tuple[datetime | None, datetime | None, datetime | None, datetime | None],
+) -> list[dict[str, Any]]:
+    """Build the edit event for one updated order and stage its audit rows.
+
+    A customer's form relayed from a linked device is recorded like the public
+    form: an edit in the client-form section plus CLIENT_FORM_SUBMITTED, both
+    attributed to the customer. A staff edit that touches the customer's
+    identity carries the CUSTOMER section instead, which is what pushes the
+    change to Shopify.
+    """
+    if submission_source is not None:
+        edit_event = build_order_edited_event(
+            order_instance=order,
+            changed_sections=[ORDER_EDIT_SECTION_CLIENT_FORM],
+        )
+    elif changed_sections:
+        sections = list(changed_sections)
+        if customer_fields_changed:
+            sections.append(ORDER_EDIT_SECTION_CUSTOMER)
+        if "schedule" in changed_sections:
+            old_earliest, old_latest, new_earliest, new_latest = window_bounds
+            edit_event = build_delivery_window_rescheduled_by_user_event(
+                order_instance=order,
+                old_earliest=old_earliest,
+                old_latest=old_latest,
+                new_earliest=new_earliest,
+                new_latest=new_latest,
+                changed_sections=sections,
+            )
+        else:
+            edit_event = build_order_edited_event(
+                order_instance=order,
+                changed_sections=sections,
+            )
+    elif audit_changes:
+        # Fields outside the driver-visible snapshot (notes, flags, external
+        # tracking) still change the order; without an event their audit rows
+        # would have no history entry to belong to.
+        edit_event = build_order_edited_event(
+            order_instance=order,
+            changed_sections=["details"],
+        )
+    else:
+        return []
+
+    if submission_source is None:
+        edit_event["event_id"] = new_audit_event_id()
+        record_order_audit_changes(
+            ctx,
+            order_id=order.id,
+            team_id=order.team_id,
+            event_id=edit_event["event_id"],
+            changes=audit_changes,
+        )
+        return [edit_event]
+
+    # The customer's changes belong to their submission; the companion edit
+    # event only carries the realtime "order updated" frame.
+    submitted_event = build_client_form_submitted_event(order)
+    submitted_event["event_id"] = new_audit_event_id()
+    record_order_audit_changes(
+        ctx,
+        order_id=order.id,
+        team_id=order.team_id,
+        event_id=submitted_event["event_id"],
+        changes=audit_changes,
+        attribute_to_user=False,
+    )
+    events = [edit_event, submitted_event]
+    for event in events:
+        mark_client_form_submission(
+            event,
+            submission_source=submission_source,
+            relayed_by_user_id=ctx.user_id,
+        )
+    return events
 
 
 def _build_change_flags(
@@ -389,6 +489,22 @@ def _extract_costumer_update_flags(targets: list[dict[str, Any]]) -> None:
         target["requested_costumer_id"] = _extract_requested_costumer_id(
             target["target_id"], fields
         )
+
+
+def _extract_submission_sources(targets: list[dict[str, Any]]) -> None:
+    """Pop ``submission_source`` out of each target's fields.
+
+    Present when the staff app relays a form the customer filled on a linked
+    device; the update is then recorded as the customer's own submission.
+    """
+    for target in targets:
+        fields = target.get("fields") or {}
+        source = fields.pop("submission_source", None)
+        if source is not None and source not in CLIENT_FORM_SUBMISSION_SOURCES:
+            raise ValidationFailed(
+                f"Target '{target['target_id']}' has an unsupported submission_source: {source!r}"
+            )
+        target["submission_source"] = source
 
 
 def _extract_requested_costumer_id(target_id: Any, fields: dict[str, Any]) -> int | None:

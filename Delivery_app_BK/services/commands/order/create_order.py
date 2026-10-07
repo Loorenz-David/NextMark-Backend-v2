@@ -8,6 +8,7 @@ from Delivery_app_BK.errors import NotFound, ValidationFailed
 from Delivery_app_BK.services.infra.events.builders.order import (
     build_client_form_submitted_event,
     build_order_created_event,
+    mark_client_form_submission,
 )
 from Delivery_app_BK.models import (
     db,
@@ -119,6 +120,7 @@ def create_order(ctx: ServiceContext):
         extra_instances: list[object] = []
         post_flush_actions: list[Callable[[], None]] = []
         items_by_order_client_id: dict[str, list[Item]] = defaultdict(list)
+        submission_source_by_client_id: dict[str, str] = {}
         plan_objective_results_by_order_client_id: dict[str, PlanObjectiveCreateResult] = {}
         allocated_scalar_ids = reserve_order_scalar_ids(ctx, len(order_requests))
 
@@ -176,6 +178,11 @@ def create_order(ctx: ServiceContext):
                 order_instance.route_plan = route_plan
                 if route_plan is not None:
                     touched_route_plans[route_plan.id] = route_plan
+            if order_request.submission_source is not None:
+                order_instance.client_form_submitted_at = datetime.now(timezone.utc)
+                submission_source_by_client_id[order_instance.client_id] = (
+                    order_request.submission_source
+                )
             order_instances.append(order_instance)
 
             if normalized_windows is not None:
@@ -241,7 +248,14 @@ def create_order(ctx: ServiceContext):
             db.session.flush()
 
         for order_instance in order_instances:
-            pending_events.extend(_build_order_creation_events(order_instance))
+            submission_source = submission_source_by_client_id.get(order_instance.client_id)
+            pending_events.extend(
+                _build_order_creation_events(
+                    order_instance,
+                    submission_source=submission_source,
+                    relayed_by_user_id=ctx.user_id if submission_source else None,
+                )
+            )
             bundle = {"order": serialize_created_order(order_instance)}
 
             created_items = items_by_order_client_id.get(order_instance.client_id) or []
@@ -281,11 +295,25 @@ def create_order(ctx: ServiceContext):
     return {"created": created_bundles, "plan_totals": plan_totals}
 
 
-def _build_order_creation_events(order_instance: Order) -> list[dict]:
-    return [
-        build_order_created_event(order_instance),
-        build_client_form_submitted_event(order_instance),
-    ]
+def _build_order_creation_events(
+    order_instance: Order,
+    *,
+    submission_source: str | None = None,
+    relayed_by_user_id: int | None = None,
+) -> list[dict]:
+    """The staff member creates the order. Only when the customer filled the
+    form on a linked device is there also a client-form submission, and that
+    one is the customer's."""
+    events = [build_order_created_event(order_instance)]
+    if submission_source is not None:
+        events.append(
+            mark_client_form_submission(
+                build_client_form_submitted_event(order_instance),
+                submission_source=submission_source,
+                relayed_by_user_id=relayed_by_user_id,
+            )
+        )
+    return events
 
 
 def _load_route_plans_by_id(

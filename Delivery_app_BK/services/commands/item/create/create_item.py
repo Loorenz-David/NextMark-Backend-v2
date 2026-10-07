@@ -20,6 +20,11 @@ from Delivery_app_BK.services.domain.vehicle.recompute_vehicle_warnings_by_order
 from Delivery_app_BK.services.domain.route_operations.plan.route_freshness import touch_route_freshness_by_order
 from Delivery_app_BK.services.infra.events.builders.order import build_order_edited_event
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
+from Delivery_app_BK.services.infra.audit import record_order_audit_changes_by_order
+from Delivery_app_BK.services.domain.order.audit import (
+    OrderFieldChange,
+    item_created_change,
+)
 from Delivery_app_BK.sockets.emitters.route_plan_events import emit_delivery_plan_totals_updated
 from Delivery_app_BK.services.commands.order.create_serializers import serialize_created_items
 
@@ -64,8 +69,15 @@ def create_item(ctx: ServiceContext):
         touch_route_freshness_by_order(order)
     _recompute_affected_plans(_unique_orders(touched_orders))
     db.session.flush()
+    changes_by_order_id: dict[int, list[OrderFieldChange]] = {}
+    for instance in instances:
+        if instance.order_id is not None:
+            changes_by_order_id.setdefault(instance.order_id, []).append(
+                item_created_change(instance)
+            )
+    event_id_by_order_id = record_order_audit_changes_by_order(ctx, changes_by_order_id)
     db.session.commit()
-    _emit_item_update_events(ctx, touched_orders)
+    _emit_item_update_events(ctx, touched_orders, event_id_by_order_id)
     _emit_plan_totals_events(_unique_orders(touched_orders))
     return {"item": serialize_created_items(instances), "_affected_orders": _unique_orders(touched_orders)}
 
@@ -101,15 +113,19 @@ def _emit_plan_totals_events(orders: list[Order]) -> None:
         emit_delivery_plan_totals_updated(plan)
 
 
-def _emit_item_update_events(ctx: ServiceContext, orders: list[Order]) -> None:
+def _emit_item_update_events(
+    ctx: ServiceContext,
+    orders: list[Order],
+    event_id_by_order_id: dict[int, str],
+) -> None:
     unique_orders = _unique_orders(orders)
     if not unique_orders:
         return
 
-    emit_order_events(
-        ctx,
-        [
-            build_order_edited_event(order, changed_sections=["items"])
-            for order in unique_orders
-        ],
-    )
+    events = []
+    for order in unique_orders:
+        event = build_order_edited_event(order, changed_sections=["items"])
+        if order.id in event_id_by_order_id:
+            event["event_id"] = event_id_by_order_id[order.id]
+        events.append(event)
+    emit_order_events(ctx, events)

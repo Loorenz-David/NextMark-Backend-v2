@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.services.domain.item.item_states import ItemStateId
+from Delivery_app_BK.services.domain.order.order_events import CLIENT_FORM_SUBMISSION_SOURCES
 from Delivery_app_BK.services.domain.order.order_states import OrderStateId
 from Delivery_app_BK.services.requests.common.fields import (
     validate_forbidden,
@@ -21,6 +22,7 @@ from Delivery_app_BK.services.requests.common.types import (
 
 ORDER_ALLOWED_FIELDS = {
     "client_id",
+    "submission_source",
     "costumer",
     "order_plan_objective",
     "reference_number",
@@ -156,6 +158,7 @@ class OrderCreateRequest:
     route_group_id: int | None
     costumer: OrderCostumerRequest | None
     delivery_windows: list[dict] | None = None
+    submission_source: str | None = None
 
 
 def parse_create_order_request(raw_fields: dict) -> OrderCreateRequest:
@@ -246,6 +249,9 @@ def parse_create_order_request(raw_fields: dict) -> OrderCreateRequest:
 
     item_requests = _parse_items(raw_fields)
     delivery_windows = _parse_delivery_windows(raw_fields)
+    submission_source = raw_fields.get("submission_source")
+    if submission_source is not None and submission_source not in CLIENT_FORM_SUBMISSION_SOURCES:
+        raise ValidationFailed(f"Unsupported submission_source: {submission_source!r}")
     return OrderCreateRequest(
         fields=order_fields,
         items=item_requests,
@@ -253,6 +259,7 @@ def parse_create_order_request(raw_fields: dict) -> OrderCreateRequest:
         route_group_id=route_group_id,
         costumer=costumer,
         delivery_windows=delivery_windows,
+        submission_source=submission_source,
     )
 
 

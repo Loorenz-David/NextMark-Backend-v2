@@ -11,6 +11,17 @@ from Delivery_app_BK.services.commands.order.update_extensions.types import (
 
 
 @pytest.fixture(autouse=True)
+def audit_records(monkeypatch):
+    recorded: list[dict] = []
+    monkeypatch.setattr(
+        module,
+        "record_order_audit_changes",
+        lambda _ctx, **kwargs: recorded.append(kwargs),
+    )
+    return recorded
+
+
+@pytest.fixture(autouse=True)
 def _no_terms_configured(monkeypatch):
     """Default for these tests: the team collects no terms acceptance.
 
@@ -19,7 +30,7 @@ def _no_terms_configured(monkeypatch):
     monkeypatch.setattr(module, "resolve_terms_acceptance", lambda team_id, payload: None)
 
 
-def test_submit_client_form_persists_allowed_fields_and_emits_submission_events(monkeypatch):
+def test_submit_client_form_persists_allowed_fields_and_emits_submission_events(monkeypatch, audit_records):
     order = SimpleNamespace(
         id=42,
         team_id=7,
@@ -55,7 +66,21 @@ def test_submit_client_form_persists_allowed_fields_and_emits_submission_events(
     assert emitted_events[0]["team_id"] == 7
     assert emitted_events[0]["event_name"] == OrderEvent.EDITED.value
     assert emitted_events[0]["payload"]["changed_sections"] == ["client_form_submission"]
-    assert emitted_events[1] == {
+    # The changes belong to the submission, not to the realtime edit event.
+    assert "event_id" not in emitted_events[0]
+    assert audit_records[0]["event_id"] == emitted_events[1]["event_id"]
+    assert sorted(
+        (change.field_name, change.from_value, change.to_value)
+        for change in audit_records[0]["changes"]
+    ) == [
+        ("client_email", "old@example.com", "new@example.com"),
+        (
+            "client_primary_phone",
+            {"number": "5550000", "prefix": "+1"},
+            {"number": "2020203", "prefix": "+46"},
+        ),
+    ]
+    assert {key: value for key, value in emitted_events[1].items() if key != "event_id"} == {
         "order_id": 42,
         "team_id": 7,
         "event_name": OrderEvent.CLIENT_FORM_SUBMITTED.value,

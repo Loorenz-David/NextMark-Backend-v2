@@ -1,6 +1,7 @@
 import logging
 
 from Delivery_app_BK.models import Order, OrderScheduleTarget, RoutePlan, db
+from Delivery_app_BK.services.domain.order.order_events import ORDER_EDIT_SECTION_CUSTOMER
 from Delivery_app_BK.services.domain.order.shopify import (
     is_shopify_order,
     should_fulfill_shopify_order,
@@ -36,6 +37,22 @@ def sync_shopify_fulfillment_on_order_completed(order_event) -> None:
 
 
 def sync_shopify_costumer_on_client_form_submitted(order_event) -> None:
+    _enqueue_shopify_costumer_sync(order_event)
+
+
+def sync_shopify_costumer_on_customer_edit(order_event) -> None:
+    """Staff edits to the customer's identity fields reach Shopify through the
+    edit event itself. Edits without the CUSTOMER section — including the
+    Shopify inbound sync's own, which is what keeps the two from echoing — are
+    ignored."""
+    payload = getattr(order_event, "payload", None) or {}
+    changed_sections = payload.get("changed_sections") or []
+    if ORDER_EDIT_SECTION_CUSTOMER not in changed_sections:
+        return
+    _enqueue_shopify_costumer_sync(order_event)
+
+
+def _enqueue_shopify_costumer_sync(order_event) -> None:
     from Delivery_app_BK.services.infra.tasks.order.sync_shopify import sync_shopify
 
     event_order_id = getattr(order_event, "order_id", None)

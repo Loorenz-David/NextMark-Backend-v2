@@ -64,6 +64,23 @@ def build_client_form_submitted_event(order_instance: Order) -> dict:
     }
 
 
+def mark_client_form_submission(
+    event: dict,
+    *,
+    submission_source: str,
+    relayed_by_user_id: int | None,
+) -> dict:
+    """Attribute an event to the customer rather than the staff session that
+    relayed their form: no actor, and the relaying user kept in the payload."""
+    event["actor_id"] = None
+    event["payload"] = {
+        **(event.get("payload") or {}),
+        "submission_source": submission_source,
+        "relayed_by_user_id": relayed_by_user_id,
+    }
+    return event
+
+
 def build_delivery_window_rescheduled_by_user_event(
     order_instance: Order,
     old_earliest: datetime | None,

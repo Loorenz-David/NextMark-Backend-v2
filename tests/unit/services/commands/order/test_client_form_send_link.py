@@ -5,6 +5,17 @@ import pytest
 from Delivery_app_BK.services.commands.order.client_form import send_link as module
 
 
+@pytest.fixture(autouse=True)
+def audit_records(monkeypatch):
+    recorded: list[dict] = []
+    monkeypatch.setattr(
+        module,
+        "record_order_audit_changes",
+        lambda _ctx, **kwargs: recorded.append(kwargs),
+    )
+    return recorded
+
+
 def test_send_client_form_link_messages_queues_email_and_sms():
     order = SimpleNamespace(
         client_email="client@example.com",
@@ -101,7 +112,7 @@ def test_parse_recipients_rejects_unknown_keys():
         module.parse_recipients({"recipients": {"whatsapp": "+1555"}})
 
 
-def test_send_client_form_link_generates_and_sends(monkeypatch):
+def test_send_client_form_link_generates_and_sends(monkeypatch, audit_records):
     expires_at = SimpleNamespace(isoformat=lambda: "2026-04-04T00:00:00+00:00")
     order = SimpleNamespace(id=10, client_email="client@example.com")
     emitted_payloads: list[dict] = []
@@ -143,6 +154,7 @@ def test_send_client_form_link_generates_and_sends(monkeypatch):
     }
     assert emitted_payloads == [
         {
+            "event_id": audit_records[0]["event_id"],
             "order_id": 10,
             "event_name": module.CLIENT_FORM_LINK_EVENT,
             "team_id": 5,
@@ -151,9 +163,11 @@ def test_send_client_form_link_generates_and_sends(monkeypatch):
             },
         }
     ]
+    # Same recipient as on file: nothing changed, so nothing is audited.
+    assert audit_records[0]["changes"] == []
 
 
-def test_send_client_form_link_persists_recipient_overrides_to_order(monkeypatch):
+def test_send_client_form_link_persists_recipient_overrides_to_order(monkeypatch, audit_records):
     expires_at = SimpleNamespace(isoformat=lambda: "2026-04-04T00:00:00+00:00")
     order = SimpleNamespace(
         id=10,
@@ -192,3 +206,14 @@ def test_send_client_form_link_persists_recipient_overrides_to_order(monkeypatch
 
     assert order.client_email == "new@example.com"
     assert order.client_primary_phone == {"prefix": "+46", "number": "2020203"}
+    assert [
+        (change.field_name, change.from_value, change.to_value)
+        for change in audit_records[0]["changes"]
+    ] == [
+        ("client_email", "old@example.com", "new@example.com"),
+        (
+            "client_primary_phone",
+            {"prefix": "+1", "number": "1111111"},
+            {"prefix": "+46", "number": "2020203"},
+        ),
+    ]

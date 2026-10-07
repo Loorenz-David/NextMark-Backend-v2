@@ -9,6 +9,7 @@ from .order_events import (
     build_order_state_transition_events,
     build_order_status_changed_event,
     build_order_created_event,
+    mark_client_form_submission,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "build_order_state_transition_events",
     "build_order_status_changed_event",
     "build_order_created_event",
+    "mark_client_form_submission",
 ]

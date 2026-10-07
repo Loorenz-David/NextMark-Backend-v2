@@ -7,7 +7,18 @@ from Delivery_app_BK.services.commands.order import update_order_notes as module
 from Delivery_app_BK.services.context import ServiceContext
 
 
-def test_update_order_notes_updates_general_note_and_emits_event(monkeypatch):
+@pytest.fixture(autouse=True)
+def audit_records(monkeypatch):
+    recorded: list[dict] = []
+    monkeypatch.setattr(
+        module,
+        "record_order_audit_changes",
+        lambda _ctx, **kwargs: recorded.append(kwargs),
+    )
+    return recorded
+
+
+def test_update_order_notes_updates_general_note_and_emits_event(monkeypatch, audit_records):
     order = SimpleNamespace(
         id=4360,
         team_id=7,
@@ -42,6 +53,11 @@ def test_update_order_notes_updates_general_note_and_emits_event(monkeypatch):
     assert len(emitted_events) == 1
     assert emitted_events[0]["order_id"] == 4360
     assert emitted_events[0]["payload"]["changed_sections"] == ["details"]
+    assert audit_records[0]["event_id"] == emitted_events[0]["event_id"]
+    assert [
+        (change.entity_id, change.from_value, change.to_value)
+        for change in audit_records[0]["changes"]
+    ] == [("GENERAL", "old general", "some new general notes")]
 
 
 def test_update_order_notes_updates_costumer_note_from_stringified_list_entry(monkeypatch):

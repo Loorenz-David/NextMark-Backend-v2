@@ -32,9 +32,18 @@ def _request() -> ItemPlacedRequest:
 
 def test_item_placed_updates_matching_items_and_emits_event(monkeypatch):
     order = SimpleNamespace(id=10, team_id=7)
-    items = [SimpleNamespace(item_position=None), SimpleNamespace(item_position=None)]
+    items = [
+        SimpleNamespace(id=1, article_number="SKU-1", item_position=None),
+        SimpleNamespace(id=2, article_number="SKU-1", item_position="Dock"),
+    ]
     emitted_events: list[dict] = []
     built_events: list[dict] = []
+    audit_records: list[dict] = []
+    monkeypatch.setattr(
+        module,
+        "record_order_audit_changes",
+        lambda _ctx, **kwargs: audit_records.append(kwargs),
+    )
     query_results = [
         SimpleNamespace(filter=lambda *args, **kwargs: SimpleNamespace(first=lambda: order)),
         SimpleNamespace(filter=lambda *args, **kwargs: SimpleNamespace(all=lambda: items)),
@@ -65,7 +74,18 @@ def test_item_placed_updates_matching_items_and_emits_event(monkeypatch):
     assert result == {"updated_count": 2}
     assert [item.item_position for item in items] == ["Shelf A-3", "Shelf A-3"]
     assert built_events == [{"order": order, "changed_sections": ["items"]}]
-    assert emitted_events[-1] == {"team_id": 7, "events": [{"event_name": "order.edited"}]}
+    event_id = audit_records[0]["event_id"]
+    assert emitted_events[-1] == {
+        "team_id": 7,
+        "events": [{"event_name": "order.edited", "event_id": event_id}],
+    }
+    assert [
+        (change.entity_id, change.field_name, change.from_value, change.to_value)
+        for change in audit_records[0]["changes"]
+    ] == [
+        ("1", "item_position", None, "Shelf A-3"),
+        ("2", "item_position", "Dock", "Shelf A-3"),
+    ]
 
 
 def test_item_placed_returns_warning_when_no_matching_items(monkeypatch):

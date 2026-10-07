@@ -23,6 +23,11 @@ class OrderAuditLog(db.Model, TeamScopedMixin):
 
     user_name = Column(String)
 
+    event_id = Column(String, nullable=True, index=True)
+    entity_type = Column(String, nullable=True)
+    entity_id = Column(String, nullable=True)
+    entity_label = Column(String, nullable=True)
+
     changed_at = Column(UTCDateTime, default=lambda: datetime.now(timezone.utc), index=True)
     changed_by_user_id = Column(
         Integer,
