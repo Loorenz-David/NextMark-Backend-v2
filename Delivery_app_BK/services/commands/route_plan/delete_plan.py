@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from Delivery_app_BK.models import db, RoutePlan
+from Delivery_app_BK.models import db, RoutePlan, User
 from Delivery_app_BK.sockets.notifications import notify_delivery_planning_event
 from ...context import ServiceContext
 from ..base.delete_instance import delete_instance
@@ -24,6 +24,7 @@ def delete_plan(ctx: ServiceContext):
         instances.append(delete_instance(ctx, RoutePlan, target_id))
     db.session.commit()
 
+    actor = db.session.get(User, ctx.user_id) if ctx.user_id else None
     for plan in deleted_plans:
         notify_delivery_planning_event(
             event_id=str(uuid4()),
@@ -38,6 +39,6 @@ def delete_plan(ctx: ServiceContext):
                 "date_strategy": plan["date_strategy"],
             },
             occurred_at=datetime.now(timezone.utc),
-            actor=None,
+            actor=actor,
         )
     return instances

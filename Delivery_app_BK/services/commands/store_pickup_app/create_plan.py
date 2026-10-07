@@ -110,6 +110,7 @@ def create_store_pickup_plan(ctx: ServiceContext) -> dict:
     if pending_order_events:
         emit_order_events(ctx, pending_order_events)
 
+    actor = db.session.get(User, ctx.user_id) if ctx.user_id else None
     for bundle in created_bundles:
         route_plan_payload = bundle["route_plan"]
         notify_delivery_planning_event(
@@ -125,7 +126,7 @@ def create_store_pickup_plan(ctx: ServiceContext) -> dict:
                 "date_strategy": route_plan_payload["date_strategy"],
             },
             occurred_at=datetime.now(timezone.utc),
-            actor=None,
+            actor=actor,
         )
 
     return {"created": created_bundles}

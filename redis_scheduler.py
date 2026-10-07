@@ -10,6 +10,7 @@ from Delivery_app_BK.services.infra.jobs.tasks.maintenance import (
     requeue_stale_message_actions_job,
 )
 from Delivery_app_BK.services.infra.jobs.tasks.analytics import aggregate_daily_metrics_job
+from Delivery_app_BK.services.infra.jobs.tasks.order_retention import purge_unplanned_orders_job
 from Delivery_app_BK.services.infra.redis import get_current_rq_redis_connection
 from Delivery_app_BK.services.infra.redis import assert_current_redis_available, describe_redis_uri, get_redis_uri
 
@@ -66,6 +67,13 @@ def main() -> None:
             job_id="aggregate-daily-metrics",
             fn=aggregate_daily_metrics_job,
             interval_seconds=86400,
+            queue_name=queue_names.default,
+        )
+        _ensure_periodic_job(
+            scheduler=scheduler,
+            job_id="purge-unplanned-orders",
+            fn=purge_unplanned_orders_job,
+            interval_seconds=app.config.get("UNPLANNED_ORDER_PURGE_INTERVAL_SECONDS", 3600),
             queue_name=queue_names.default,
         )
 

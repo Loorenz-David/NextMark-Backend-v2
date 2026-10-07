@@ -297,8 +297,10 @@ def _extract_order_filters(params: dict, result: dict) -> dict | None:
     """Convert list_orders tool params into apply_order_filters payload."""
     filters: dict = {}
 
-    if params.get("scheduled") is not None:
-        filters["unschedule_order"] = not params["scheduled"]
+    if params.get("scheduled") is True:
+        filters["schedule_order"] = True
+    elif params.get("scheduled") is False:
+        filters["unschedule_order"] = True
     if params.get("plan_id") is not None:
         filters["plan_id"] = params["plan_id"]
     if params.get("q"):

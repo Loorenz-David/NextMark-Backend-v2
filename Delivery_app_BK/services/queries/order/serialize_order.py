@@ -86,6 +86,9 @@ def _serialize_order_instance(instance: Order, ctx: ServiceContext, include_item
     }
     if instance.archive_at is not None:
         unpacked['archive_at'] = instance.archive_at
+    discard_after = getattr(instance, "discard_after", None)
+    if discard_after is not None:
+        unpacked['discard_after'] = discard_after.isoformat()
 
     if include_items:
         unpacked["items"] = serialize_items(

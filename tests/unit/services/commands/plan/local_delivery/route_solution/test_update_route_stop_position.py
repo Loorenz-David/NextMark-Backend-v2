@@ -1,3 +1,4 @@
+import pytest
 import importlib
 from types import SimpleNamespace
 
@@ -32,6 +33,7 @@ def test_stages_occupied_positions_before_route_timing_refresh(monkeypatch):
         stops=[moving_stop, shifted_stop],
         is_optimized=IS_OPTIMIZED_NOT_OPTIMIZED,
         team_id=5,
+        route_group_id=3,
     )
     ctx = SimpleNamespace(
         time_zone="Europe/Stockholm",
@@ -95,3 +97,9 @@ def test_stages_occupied_positions_before_route_timing_refresh(monkeypatch):
         ("refresh", [(6115, 2), (6114, 1)]),
         ("commit", None),
     ]
+
+
+@pytest.fixture(autouse=True)
+def _no_arrival_tracking(monkeypatch):
+    # Arrival tracking reads the routes from the database; it has its own tests.
+    monkeypatch.setattr(module, "snapshot_route_arrivals", lambda *_args, **_kwargs: None)

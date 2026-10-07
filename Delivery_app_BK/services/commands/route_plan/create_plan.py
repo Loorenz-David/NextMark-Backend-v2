@@ -217,8 +217,10 @@ def create_plan(ctx: ServiceContext):
 
     actor = db.session.get(User, ctx.user_id) if ctx.user_id else None
 
+    # Admins hear about the new plan once, below; each route still tells its
+    # own driver.
     for route_solution in created_route_solutions:
-        emit_route_solution_created(route_solution, actor=actor)
+        emit_route_solution_created(route_solution, actor=actor, notify_admins=False)
 
     for bundle in created_bundles:
         route_plan_payload = bundle.get("delivery_plan") or {}
@@ -239,7 +241,7 @@ def create_plan(ctx: ServiceContext):
                 "route_freshness_updated_at": route_plan_payload.get("updated_at"),
             },
             occurred_at=datetime.now(timezone.utc),
-            actor=None,
+            actor=actor,
         )
 
     return {"created": created_bundles}

@@ -27,6 +27,11 @@ from Delivery_app_BK.sockets.emitters.route_solution_stop_events import (
     notify_route_solution_stops_batch_updated,
 )
 
+from Delivery_app_BK.services.commands.route_plan.local_delivery.arrival_tracking import (
+    collect_arrival_changes,
+    snapshot_route_arrivals,
+)
+from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
 from ..clone import clone_route_solution
 from .update_route_stop_position import (
     _dedupe_and_sort_stops,
@@ -56,6 +61,8 @@ def update_route_stop_group_position(
     _is_route_solution_end_date_valid(route_solution)
     _validate_route_solution_orders_have_coordinates(route_solution)
 
+    # Before any clone: the selected variant's arrivals are what changes.
+    arrival_snapshot = snapshot_route_arrivals(route_solution.team_id, [route_solution.route_group_id])
     original_route_solution = None
     route_stop_ids = parsed.route_stop_ids
     anchor_stop_id = parsed.anchor_stop_id
@@ -216,12 +223,16 @@ def update_route_stop_group_position(
         )
         emit_route_solution_stop_updated(stop, notify=False, actor=actor)
 
+    arrival_outcome = collect_arrival_changes(arrival_snapshot, cause="stops_reordered")
     notify_route_solution_stops_batch_updated(
         route_solution=route_solution,
         affected_stop_count=len(changed_stops),
         change_hint="stops_reordered",
         actor=actor,
+        payload=arrival_outcome.notification_payload,
     )
+    if arrival_outcome.events:
+        emit_order_events(ctx, arrival_outcome.events)
 
     return {
         'route_solution': serialize_route_solutions([route_solution], ctx),

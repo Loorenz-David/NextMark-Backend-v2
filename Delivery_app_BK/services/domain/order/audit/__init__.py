@@ -14,6 +14,7 @@ from .item_audit import (
     item_deleted_change,
     snapshot_item_audit_values,
 )
+from .plan_audit import DELIVERY_DATES_FIELD, ROUTE_PLAN_FIELD, plan_move_changes
 from .order_audit import (
     AUDITED_ORDER_FIELDS,
     diff_audit_notes,
@@ -24,6 +25,9 @@ from .order_audit import (
 
 __all__ = [
     "AUDITED_ITEM_FIELDS",
+    "DELIVERY_DATES_FIELD",
+    "ROUTE_PLAN_FIELD",
+    "plan_move_changes",
     "AUDITED_ORDER_FIELDS",
     "ENTITY_ITEM",
     "ENTITY_NOTE",

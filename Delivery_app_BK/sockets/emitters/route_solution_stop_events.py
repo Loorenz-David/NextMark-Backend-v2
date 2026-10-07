@@ -118,8 +118,12 @@ def notify_route_solution_stops_batch_updated(
     change_hint: str,
     *,
     actor: User | None = None,
+    payload: dict | None = None,
 ) -> None:
     """Fire a single aggregated notification after a bulk stop operation.
+
+    `payload` adds to the notification payload, e.g. the arrival changes the
+    operation caused (see arrival_tracking).
 
     Call this once after a loop that emitted multiple emit_route_solution_stop_updated(notify=False)
     calls. The change_hint describes what happened and is used by the description builder.
@@ -153,6 +157,7 @@ def notify_route_solution_stops_batch_updated(
             "plan_label": route_plan.label if route_plan else None,
             "affected_stop_count": affected_stop_count,
             "notification_change_hint": change_hint,
+            **(payload or {}),
         },
     )
     notify_delivery_planning_event(

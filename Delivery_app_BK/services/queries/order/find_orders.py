@@ -1,15 +1,17 @@
 from typing import Dict, Any
 from sqlalchemy.orm import Query
 
-from Delivery_app_BK.models import db, Order, Item, DeliveryPlan, OrderDeliveryWindow, OrderState
-from Delivery_app_BK.services.utils import inject_team_id, model_requires_team
+from Delivery_app_BK.models import db, Order, Item, DeliveryPlan, OrderState
+from Delivery_app_BK.services.utils import inject_team_id, model_requires_team, require_team_id
 from Delivery_app_BK.services.queries.utils  import parsed_string_to_list
 from sqlalchemy import func, String, false, or_
 
 from ...context import ServiceContext
 from ...utils import to_datetime
 from ..utils import apply_opaque_pagination_by_date, str_to_bool
-from ..item.find_items import find_items
+
+
+NO_PLAN_TYPE_SENTINEL = "none"
 
 
 def find_orders ( 
@@ -21,9 +23,10 @@ def find_orders (
     query = query or db.session.query( Order )
 
     if model_requires_team( Order ) and ctx.inject_team_id:
-        params = inject_team_id( params, ctx )
-    
-  
+        # Team scope always comes from the identity, never from caller params.
+        params = {**inject_team_id( params, ctx ), "team_id": require_team_id( ctx )}
+
+
     if "team_id" in params:
         query = query.filter( Order.team_id == params.get( "team_id" ) )
 
@@ -152,37 +155,13 @@ def find_orders (
             query = query.filter(or_(*filters))
 
 
-    if "schedule_order" in params:
-        query = query.filter(Order.delivery_plan_id.isnot(None))
-    if "unschedule_order" in params:
-        query = query.filter(Order.delivery_plan_id.is_(None))
-            
-
-    earliest_delivery_date_raw = params.get("earliest_delivery_date")
-    if earliest_delivery_date_raw is not None:
-        earliest_delivery_date = to_datetime(earliest_delivery_date_raw)
-        window_subquery = (
-            db.session.query(OrderDeliveryWindow.id)
-            .filter(
-                OrderDeliveryWindow.order_id == Order.id,
-                OrderDeliveryWindow.start_at >= earliest_delivery_date,
-            )
-            .exists()
-        )
-        query = query.filter(window_subquery)
-
-    latest_delivery_date_raw = params.get("latest_delivery_date")
-    if latest_delivery_date_raw is not None:
-        latest_delivery_date = to_datetime(latest_delivery_date_raw)
-        window_subquery = (
-            db.session.query(OrderDeliveryWindow.id)
-            .filter(
-                OrderDeliveryWindow.order_id == Order.id,
-                OrderDeliveryWindow.end_at <= latest_delivery_date,
-            )
-            .exists()
-        )
-        query = query.filter(window_subquery)
+    # Scheduling flags are value-aware; "scheduled" wins when both are truthy.
+    wants_scheduled = str_to_bool(params.get("schedule_order", False))
+    wants_unscheduled = str_to_bool(params.get("unschedule_order", False))
+    if wants_scheduled:
+        query = query.filter(Order.route_plan_id.isnot(None))
+    elif wants_unscheduled:
+        query = query.filter(Order.route_plan_id.is_(None))
 
     order_schedule_from_raw = params.get("order_schedule_from")
     order_schedule_to_raw = params.get("order_schedule_to")
@@ -227,7 +206,10 @@ def find_orders (
         if state_names:
             resolved_ids = (
                 db.session.query(OrderState.id)
-                .filter(OrderState.name.in_(state_names))
+                .filter(
+                    OrderState.name.in_(state_names),
+                    OrderState.team_id == ctx.team_id,
+                )
                 .all()
             )
             order_state_ids.extend(state_id for (state_id,) in resolved_ids)
@@ -247,33 +229,25 @@ def find_orders (
                 normalized_plan_types.append(stripped)
 
         deduped_plan_types = list(dict.fromkeys(normalized_plan_types))
-        if deduped_plan_types:
-            query = query.filter(Order.order_plan_objective.in_(deduped_plan_types))
+        # `none` is a sentinel for orders that have no objective yet.
+        wants_no_objective = NO_PLAN_TYPE_SENTINEL in deduped_plan_types
+        concrete_plan_types = [
+            value for value in deduped_plan_types if value != NO_PLAN_TYPE_SENTINEL
+        ]
+
+        plan_type_filters = []
+        if concrete_plan_types:
+            plan_type_filters.append(Order.order_plan_objective.in_(concrete_plan_types))
+        if wants_no_objective:
+            plan_type_filters.append(Order.order_plan_objective.is_(None))
+
+        if plan_type_filters:
+            query = query.filter(or_(*plan_type_filters))
         else:
             query = query.filter(false())
 
 
     #----------------------------------------------------
-
-
-    #  query on items table -------------------------
-
-    item_params = params.get( "items" )
-    if item_params:
-        item_params["q"] = trimmed_query
-
-        if Order.items not in joined_relations:
-            query = query.join(Order.items)
-            joined_relations.add(Order.items)
-
-        query = find_items(
-            params = item_params,
-            ctx = ctx,
-            query = query,
-        )
-
-    #----------------------------------------------------
-
 
 
     # sort query by date_asc or date_desc -------------------------
@@ -319,22 +293,7 @@ def _resolve_order_state_filter_values(params: Dict[str, Any]) -> list[Any]:
 
 
 def _resolve_plan_type_filter_values(params: Dict[str, Any], ctx: ServiceContext) -> list[Any]:
-    query_params = getattr(ctx, "query_params", None)
-    if query_params is not None and hasattr(query_params, "getlist"):
-        values = query_params.getlist("plan_type[]")
-        if values:
-            return values
-
-        values = query_params.getlist("plan_type")
-        if values:
-            return values
-
-    if "plan_type[]" in params:
-        values = params.get("plan_type[]")
-        if isinstance(values, (list, tuple)):
-            return list(values)
-        return [values]
-
+    """`plan_type` arrives as a list (router strips `[]`), a JSON/CSV string, or a scalar."""
     if "plan_type" not in params:
         return []
 

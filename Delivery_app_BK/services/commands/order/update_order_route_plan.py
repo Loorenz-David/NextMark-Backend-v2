@@ -22,11 +22,20 @@ from Delivery_app_BK.services.commands.route_plan.local_delivery.route_solution.
 from Delivery_app_BK.services.commands.route_plan.local_delivery.route_solution.stops import (
     remove_orders_stops_for_local_delivery,
 )
+from Delivery_app_BK.services.commands.route_plan.local_delivery.arrival_tracking import (
+    ArrivalSnapshot,
+    collect_arrival_changes,
+    snapshot_route_arrivals,
+)
 from Delivery_app_BK.services.infra.events.builders.order import (
     build_delivery_rescheduled_event,
     build_route_plan_changed_event,
+    fold_into_plan_change_notification,
 )
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
+from Delivery_app_BK.services.infra.audit import record_order_audit_changes
+from Delivery_app_BK.services.domain.order.audit import plan_move_changes
+from Delivery_app_BK.services.domain.order.order_events import OrderEvent as OrderEventName
 from Delivery_app_BK.services.queries.route_solutions.serialize_route_solutions import (
     serialize_route_solution,
 )
@@ -171,6 +180,15 @@ def apply_orders_route_plan_change(
         if route_group_id is not None
     }
     apply_context.destination_route_group_id_by_order_id = destination_route_group_id_by_order_id
+    # Before any stop leaves or joins a route: the orders left behind and those
+    # already on the destination route shift too.
+    arrival_snapshot = snapshot_route_arrivals(
+        ctx.team_id,
+        [
+            *old_route_group_id_by_order_id.values(),
+            *destination_route_group_id_by_order_id.values(),
+        ],
+    )
     old_local_delivery_batch = _prepare_old_local_delivery_batch_changes(
         ctx=ctx,
         apply_context=apply_context,
@@ -364,8 +382,56 @@ def apply_orders_route_plan_change(
 
     return {
         "updated": updated_bundles,
-        "pending_events": pending_events,
+        "pending_events": _finalize_plan_move_events(ctx, pending_events, arrival_snapshot),
     }
+
+
+def _finalize_plan_move_events(
+    ctx: ServiceContext,
+    events: list[dict],
+    arrival_snapshot: ArrivalSnapshot | None,
+) -> list[dict]:
+    """Group each order's plan-move events under its plan change (one
+    notification) and stage what the move changed — plan and delivery dates —
+    as that event's audit rows, inside the caller's transaction. The other
+    orders whose arrival the move shifted get their own history entries."""
+    events = fold_into_plan_change_notification(events)
+    reschedule_by_order_id = {
+        event.get("order_id"): event.get("payload") or {}
+        for event in events
+        if event.get("event_name") == OrderEventName.DELIVERY_RESCHEDULED.value
+    }
+    for event in events:
+        if event.get("event_name") != OrderEventName.DELIVERY_PLAN_CHANGED.value:
+            continue
+        payload = event.get("payload") or {}
+        reschedule = reschedule_by_order_id.get(event.get("order_id"), {})
+        record_order_audit_changes(
+            ctx,
+            order_id=event["order_id"],
+            team_id=event["team_id"],
+            event_id=event["event_id"],
+            changes=plan_move_changes(
+                old_plan_id=payload.get("old_route_plan_id"),
+                new_plan_id=payload.get("new_route_plan_id"),
+                old_plan_start=reschedule.get("old_plan_start"),
+                old_plan_end=reschedule.get("old_plan_end"),
+                new_plan_start=reschedule.get("new_plan_start"),
+                new_plan_end=reschedule.get("new_plan_end"),
+            ),
+        )
+
+    moved_order_ids = {
+        event.get("order_id")
+        for event in events
+        if event.get("event_name") == OrderEventName.DELIVERY_PLAN_CHANGED.value
+    }
+    arrival_outcome = collect_arrival_changes(
+        arrival_snapshot,
+        cause="orders_moved",
+        exclude_order_ids=moved_order_ids,
+    )
+    return events + arrival_outcome.events
 
 
 def _route_plan_move_reschedule_reason(
@@ -827,6 +893,8 @@ def apply_orders_route_plan_unassign(
         for order_id, route_group_id in old_route_group_id_by_order_id.items()
         if route_group_id is not None
     }
+    # Before any stop leaves its route: the orders left behind shift.
+    arrival_snapshot = snapshot_route_arrivals(ctx.team_id, old_route_group_id_by_order_id.values())
     old_local_delivery_batch = _prepare_old_local_delivery_batch_changes(
         ctx=ctx,
         apply_context=apply_context,
@@ -956,7 +1024,7 @@ def apply_orders_route_plan_unassign(
 
     return {
         "updated": updated_bundles,
-        "pending_events": pending_events,
+        "pending_events": _finalize_plan_move_events(ctx, pending_events, arrival_snapshot),
     }
 
 

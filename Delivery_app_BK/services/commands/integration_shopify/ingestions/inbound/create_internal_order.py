@@ -1,4 +1,7 @@
 import logging
+from datetime import datetime, timezone
+
+from flask import current_app
 
 from Delivery_app_BK.errors import NotFound
 from Delivery_app_BK.models import Costumer, ShopifyWebhookEvents, db
@@ -10,6 +13,10 @@ from Delivery_app_BK.services.domain.order.shopify_intent_sku import (
         FLAG_SKUS_TO_EXCLUDE,
         INTENT_SKU_TO_PLAN_OBJECTIVE,
         resolve_intent_from_shopify_line_items,
+)
+from Delivery_app_BK.services.domain.order.unplanned_order_retention import (
+        DEFAULT_UNPLANNED_ORDER_RETENTION_DAYS,
+        resolve_unplanned_order_discard_after,
 )
 from .line_item_enrichment import (
         ShopifyMetafieldResolver,
@@ -62,23 +69,33 @@ def create_internal_order(
                 for line_item in line_items
         ]
         items = [item for _line_item, item in item_pairs]
-        plan_objective, should_suppress = resolve_intent_from_shopify_line_items(line_items)
+        intent = resolve_intent_from_shopify_line_items(line_items)
         logger.info(
-                "Shopify inbound intent resolved | shop=%s external_order_id=%s plan_objective=%s suppress=%s mapped_items=%s",
+                "Shopify inbound intent resolved | shop=%s external_order_id=%s plan_objective=%s unplanned=%s mapped_items=%s",
                 shop,
                 external_order_id,
-                plan_objective,
-                should_suppress,
+                intent.plan_objective,
+                intent.is_unplanned,
                 len(items),
         )
 
-        if should_suppress:
-                logger.warning(
-                        "Shopify inbound order suppressed by SKU intent rules | shop=%s external_order_id=%s",
+        unplanned_discard_after = None
+        if intent.is_unplanned:
+                # Kept without an objective so staff can correct a cashier
+                # mistake; purged by the scheduler if still unplanned later.
+                unplanned_discard_after = resolve_unplanned_order_discard_after(
+                        datetime.now(timezone.utc),
+                        current_app.config.get(
+                                "UNPLANNED_ORDER_RETENTION_DAYS",
+                                DEFAULT_UNPLANNED_ORDER_RETENTION_DAYS,
+                        ),
+                )
+                logger.info(
+                        "Shopify inbound order ingested as unplanned | shop=%s external_order_id=%s discard_after=%s",
                         shop,
                         external_order_id,
+                        unplanned_discard_after.isoformat(),
                 )
-                return
 
         reserved_skus = set(INTENT_SKU_TO_PLAN_OBJECTIVE) | set(FLAG_SKUS_TO_EXCLUDE)
         before_filter_count = len(items)
@@ -111,7 +128,7 @@ def create_internal_order(
         ]
 
         order['items'] = items
-        order["order_plan_objective"] = plan_objective
+        order["order_plan_objective"] = intent.plan_objective
         identity = {'team_id': shopify_shop.team_id}
 
         if isinstance(customer_payload, dict):
@@ -140,7 +157,7 @@ def create_internal_order(
                 identity=identity,
         )
 
-        result = create_order( ctx )
+        result = create_order( ctx, unplanned_discard_after=unplanned_discard_after )
         created_count = len((result or {}).get("created") or [])
         logger.info(
                 "Shopify inbound create_order completed | shop=%s external_order_id=%s created_count=%s",

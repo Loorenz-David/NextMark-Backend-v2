@@ -68,6 +68,19 @@ def resolve_order_message_plan_type(order: Any) -> str:
     return DEFAULT_MESSAGE_PLAN_TYPE
 
 
+def should_message_order_customer(order: Any) -> bool:
+    """
+    An order with neither a plan nor an objective (e.g. a Shopify order the
+    customer took at the counter) has no planning domain to speak for, so no
+    automatic customer message applies to it.
+    """
+    if order is None:
+        return True
+    if getattr(order, "route_plan", None) is not None:
+        return True
+    return getattr(order, "order_plan_objective", None) is not None
+
+
 def resolve_route_plan_message_plan_type(route_plan: Any) -> str:
     from_plan = _normalize_known(getattr(route_plan, "plan_type", None))
     if from_plan is not None:

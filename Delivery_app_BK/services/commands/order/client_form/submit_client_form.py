@@ -44,6 +44,10 @@ from Delivery_app_BK.services.infra.events.builders.order import (
     build_order_edited_event,
 )
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
+from Delivery_app_BK.services.commands.route_plan.local_delivery.arrival_tracking import (
+    collect_arrival_changes,
+    snapshot_route_arrivals,
+)
 
 ALLOWED_CLIENT_FIELDS = {
     "client_first_name",
@@ -114,8 +118,10 @@ def submit_client_form(token: str, payload: dict) -> dict:
     # If the customer updated the delivery address, recompute downstream stop ETAs
     # using the same extension machinery as update_order (intent-based: presence of
     # client_address key is sufficient, matching update_order semantics).
+    arrival_events: list[dict] = []
     if "client_address" in safe_payload:
         ctx = ServiceContext(identity={"team_id": order.team_id, "active_team_id": order.team_id})
+        arrival_snapshot = snapshot_route_arrivals(order.team_id, [getattr(order, "route_group_id", None)])
         delta = OrderUpdateDelta(
             order_instance=order,
             old_values={},
@@ -130,6 +136,7 @@ def submit_client_form(token: str, payload: dict) -> dict:
         if ext_result.instances:
             db.session.add_all(ext_result.instances)
             db.session.commit()
+        arrival_events = collect_arrival_changes(arrival_snapshot, cause="address_changed").events
 
     emit_order_events(
         system_ctx,
@@ -140,6 +147,7 @@ def submit_client_form(token: str, payload: dict) -> dict:
                 audit_event_id=submitted_event["event_id"],
             ),
             submitted_event,
+            *arrival_events,
         ],
     )
 

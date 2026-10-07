@@ -11,6 +11,10 @@ class Config:
     REDIS_DISPATCHER_LEASE_SECONDS = int(os.environ.get("REDIS_DISPATCHER_LEASE_SECONDS", "120"))
     REDIS_DISPATCH_BATCH_SIZE = int(os.environ.get("REDIS_DISPATCH_BATCH_SIZE", "50"))
     REDIS_REPAIR_INTERVAL_SECONDS = int(os.environ.get("REDIS_REPAIR_INTERVAL_SECONDS", "60"))
+    UNPLANNED_ORDER_RETENTION_DAYS = int(os.environ.get("UNPLANNED_ORDER_RETENTION_DAYS", "5"))
+    UNPLANNED_ORDER_PURGE_INTERVAL_SECONDS = int(
+        os.environ.get("UNPLANNED_ORDER_PURGE_INTERVAL_SECONDS", "3600")
+    )
     SQLALCHEMY_ENGINE_OPTIONS = {
         "connect_args": {"options": "-c timezone=UTC"}
     }

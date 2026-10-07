@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 
 INTENT_SKU_TO_PLAN_OBJECTIVE: dict[str, str | None] = {
     "INTENT_LOCAL_DELIVERY": "local_delivery",
@@ -17,6 +19,13 @@ FLAG_SKUS_TO_EXCLUDE: frozenset[str] = frozenset(
 DEFAULT_PLAN_OBJECTIVE = "local_delivery"
 
 
+@dataclass(frozen=True)
+class ShopifyIntentResolution:
+    plan_objective: str | None
+    # The intent maps to no plan objective: the order is kept unplanned.
+    is_unplanned: bool
+
+
 def _normalize_sku(value: object) -> str | None:
     if value is None:
         return None
@@ -27,7 +36,7 @@ def _normalize_sku(value: object) -> str | None:
 
 def resolve_intent_from_shopify_line_items(
     line_items: list[dict],
-) -> tuple[str | None, bool]:
+) -> ShopifyIntentResolution:
     for item in line_items:
         if not isinstance(item, dict):
             continue
@@ -40,9 +49,9 @@ def resolve_intent_from_shopify_line_items(
             continue
 
         plan_objective = INTENT_SKU_TO_PLAN_OBJECTIVE[sku]
-        if plan_objective is None:
-            return None, True
+        return ShopifyIntentResolution(
+            plan_objective=plan_objective,
+            is_unplanned=plan_objective is None,
+        )
 
-        return plan_objective, False
-
-    return DEFAULT_PLAN_OBJECTIVE, False
+    return ShopifyIntentResolution(plan_objective=DEFAULT_PLAN_OBJECTIVE, is_unplanned=False)

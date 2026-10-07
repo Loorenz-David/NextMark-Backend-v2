@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from Delivery_app_BK.errors import ValidationFailed
-from Delivery_app_BK.models import db, Order, RoutePlan, Team, RoutePlanState
+from Delivery_app_BK.models import db, Order, RoutePlan, Team, RoutePlanState, User
 from Delivery_app_BK.sockets.notifications import notify_delivery_planning_event
 from Delivery_app_BK.services.domain.route_operations.plan.route_freshness import touch_route_freshness
 from Delivery_app_BK.services.infra.events.builders.order import build_delivery_rescheduled_event
@@ -111,16 +111,17 @@ def update_plan(ctx: ServiceContext):
                 .all()
             )
             for order in plan_orders:
-                pending_order_events.append(
-                    build_delivery_rescheduled_event(
-                        order,
-                        old_plan_start=previous_start,
-                        old_plan_end=previous_end,
-                        new_plan_start=instance.start_date,
-                        new_plan_end=instance.end_date,
-                        reason="plan_window_changed",
-                    )
+                event = build_delivery_rescheduled_event(
+                    order,
+                    old_plan_start=previous_start,
+                    old_plan_end=previous_end,
+                    new_plan_start=instance.start_date,
+                    new_plan_end=instance.end_date,
+                    reason="plan_window_changed",
                 )
+                # The plan's own notification reports the new dates.
+                event["payload"]["notification_suppressed"] = True
+                pending_order_events.append(event)
 
         updated_plans.append(instance)
         updated_ids.append(instance.id)
@@ -130,6 +131,7 @@ def update_plan(ctx: ServiceContext):
     if pending_order_events:
         emit_order_events(ctx, pending_order_events)
 
+    actor = db.session.get(User, ctx.user_id) if ctx.user_id else None
     for instance in updated_plans:
         notify_delivery_planning_event(
             event_id=str(uuid4()),
@@ -145,6 +147,6 @@ def update_plan(ctx: ServiceContext):
                 "route_freshness_updated_at": instance.updated_at.isoformat() if instance.updated_at else None,
             },
             occurred_at=instance.updated_at or datetime.now(timezone.utc),
-            actor=None,
+            actor=actor,
         )
     return updated_ids

@@ -49,7 +49,17 @@ from Delivery_app_BK.services.domain.order.recompute_order_totals import recompu
 from Delivery_app_BK.services.domain.plan.recompute_plan_totals import recompute_plan_totals
 
 
-def create_order(ctx: ServiceContext):
+def create_order(
+    ctx: ServiceContext,
+    *,
+    unplanned_discard_after: datetime | None = None,
+):
+    """
+    `unplanned_discard_after` is the system-only opt-in for orders that are
+    intentionally created without a plan objective: the objective stays
+    unset instead of defaulting, and the order is marked for purge after that
+    time unless someone plans it first.
+    """
     ctx.set_relationship_map(
         {
             "team_id": Team,
@@ -63,6 +73,10 @@ def create_order(ctx: ServiceContext):
     order_requests: list[OrderCreateRequest] = [
         parse_create_order_request(field_set) for field_set in extract_fields(ctx)
     ]
+    if unplanned_discard_after is not None and any(
+        request.delivery_plan_id is not None for request in order_requests
+    ):
+        raise ValidationFailed("An unplanned order cannot be created into a plan.")
 
     pending_events: list[dict] = []
     created_bundles: list[dict] = []
@@ -145,7 +159,9 @@ def create_order(ctx: ServiceContext):
                 if order_request.delivery_plan_id is not None
                 else None
             )
-            if not order_fields.get("order_plan_objective"):
+            if unplanned_discard_after is not None:
+                order_fields["order_plan_objective"] = None
+            elif not order_fields.get("order_plan_objective"):
                 # An order joining a plan inherits that plan's domain. Only an
                 # unassigned order falls back to the default.
                 order_fields["order_plan_objective"] = resolve_effective_order_plan_objective(
@@ -167,6 +183,8 @@ def create_order(ctx: ServiceContext):
             )
 
             order_instance: Order = create_instance(ctx, Order, order_fields)
+            if unplanned_discard_after is not None:
+                order_instance.discard_after = unplanned_discard_after
             if accepted_terms is not None:
                 order_instance.accepted_terms_version_id = accepted_terms.id
                 order_instance.terms_accepted_at = datetime.now(timezone.utc)

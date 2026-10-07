@@ -103,6 +103,9 @@ class Order(
     )
 
     archive_at = Column(UTCDateTime)
+    # Set only on orders ingested without an objective (Shopify "customer took
+    # it"); the scheduler purges them once this passes if still unplanned.
+    discard_after = Column(UTCDateTime, nullable=True, index=True)
 
     # Client-form secure link fields
     client_form_token_hash = Column(String(64), unique=True, nullable=True, index=True)

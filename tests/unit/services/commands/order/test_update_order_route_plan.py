@@ -266,7 +266,7 @@ def test_apply_orders_route_plan_unassign_preserves_order_plan_objective(monkeyp
         total_item_count=None,
         total_orders=0,
     )
-    ctx = SimpleNamespace(set_warning=lambda *_args, **_kwargs: None)
+    ctx = SimpleNamespace(team_id=1, set_warning=lambda *_args, **_kwargs: None)
 
     monkeypatch.setattr(module, "_resolve_orders_for_update", lambda *_args, **_kwargs: {1: order})
     monkeypatch.setattr(module, "_get_order_route_plan_id", lambda instance: instance.route_plan_id)
@@ -343,3 +343,9 @@ def test_apply_orders_route_plan_unassign_preserves_order_plan_objective(monkeyp
     assert order.route_group_id is None
     assert order.order_plan_objective == "local_delivery"
     assert result["updated"][0]["order"]["order_plan_objective"] == "local_delivery"
+
+
+@pytest.fixture(autouse=True)
+def _no_arrival_tracking(monkeypatch):
+    # Arrival tracking reads the routes from the database; it has its own tests.
+    monkeypatch.setattr(module, "snapshot_route_arrivals", lambda *_args, **_kwargs: None)

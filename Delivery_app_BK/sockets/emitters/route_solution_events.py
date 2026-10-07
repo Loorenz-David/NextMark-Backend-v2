@@ -16,8 +16,12 @@ def emit_route_solution_created(
     *,
     payload: dict | None = None,
     actor: User | None = None,
+    notify_admins: bool = True,
 ) -> None:
-    """Emit RouteSolution created event. Broadcast to team_orders (admin visibility) and team_members (driver notification)."""
+    """Emit RouteSolution created event. Broadcast to team_orders (admin visibility) and team_members (driver notification).
+
+    `notify_admins=False` still tells the route's driver, but leaves admins to
+    the notification of whatever created the route (e.g. its plan)."""
     route_group_id = getattr(route_solution, "route_group_id", None)
     if route_group_id is None:
         route_group_id = getattr(route_solution, "local_delivery_plan_id", None)
@@ -75,6 +79,7 @@ def emit_route_solution_created(
         payload=envelope["payload"],
         occurred_at=envelope["occurred_at"],
         actor=actor,
+        notify_admins=notify_admins,
     )
     current_app.logger.info("Emitted route_solution.created: solution_id=%d, team_id=%d", route_solution.id, team_id)
 
@@ -84,8 +89,12 @@ def emit_route_solution_updated(
     *,
     payload: dict | None = None,
     actor: User | None = None,
+    notify: bool = True,
 ) -> None:
-    """Emit RouteSolution updated event. Broadcast to team_orders (admin visibility) and team_members (driver notification)."""
+    """Emit RouteSolution updated event. Broadcast to team_orders (admin visibility) and team_members (driver notification).
+
+    `notify=False` keeps the realtime refresh but skips the notification, for
+    saves already reported by another one (e.g. the plan's)."""
     route_group_id = getattr(route_solution, "route_group_id", None)
     if route_group_id is None:
         route_group_id = getattr(route_solution, "local_delivery_plan_id", None)
@@ -129,16 +138,17 @@ def emit_route_solution_updated(
     emit_business_event(room=build_team_admin_room(team_id), envelope=envelope)
     # Broadcast to team_members room (driver notification)
     emit_business_event(room=build_team_members_room(team_id), envelope=envelope)
-    notify_delivery_planning_event(
-        event_id=envelope["event_id"],
-        event_name=BUSINESS_EVENT_ROUTE_SOLUTION_UPDATED,
-        team_id=team_id,
-        entity_type="route_solution",
-        entity_id=route_solution.id,
-        payload=envelope["payload"],
-        occurred_at=envelope["occurred_at"],
-        actor=actor,
-    )
+    if notify:
+        notify_delivery_planning_event(
+            event_id=envelope["event_id"],
+            event_name=BUSINESS_EVENT_ROUTE_SOLUTION_UPDATED,
+            team_id=team_id,
+            entity_type="route_solution",
+            entity_id=route_solution.id,
+            payload=envelope["payload"],
+            occurred_at=envelope["occurred_at"],
+            actor=actor,
+        )
     current_app.logger.info("Emitted route_solution.updated: solution_id=%d, team_id=%d", route_solution.id, team_id)
 
 

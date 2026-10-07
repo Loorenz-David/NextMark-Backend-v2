@@ -28,6 +28,8 @@ ORDER_FIELD_LABELS: dict[str, str] = {
     "help_to_carry": "Help to carry",
     "marketing_messages": "Marketing messages",
     "delivery_windows": "Delivery window",
+    "route_plan_id": "Plan",
+    "delivery_dates": "Delivery date",
 }
 
 ITEM_FIELD_LABELS: dict[str, str] = {

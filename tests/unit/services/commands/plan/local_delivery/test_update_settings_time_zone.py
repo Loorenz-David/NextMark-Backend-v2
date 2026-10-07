@@ -134,7 +134,7 @@ def test_update_local_delivery_settings_uses_context_timezone_even_when_payload_
     assert captured["time_zone"] == "America/New_York"
 
 
-def test_build_order_rescheduled_events_includes_plan_window_fanout():
+def test_moving_plan_dates_reschedules_every_order_quietly():
     team_id = 10
     order_one = SimpleNamespace(id=1, team_id=team_id)
     order_two = SimpleNamespace(id=2, team_id=team_id)
@@ -143,100 +143,30 @@ def test_build_order_rescheduled_events_includes_plan_window_fanout():
         end_date=datetime(2026, 3, 2, 23, 0, tzinfo=timezone.utc),
         orders=[order_one, order_two],
     )
-    route_solution = SimpleNamespace(stops=[])
 
-    events = module._build_order_rescheduled_events_for_route_group_update(
+    events = module._build_plan_window_rescheduled_events(
         ctx=SimpleNamespace(team_id=team_id),
         route_plan=route_plan,
         previous_plan_start=datetime(2026, 3, 1, 0, 0, tzinfo=timezone.utc),
         previous_plan_end=datetime(2026, 3, 1, 23, 0, tzinfo=timezone.utc),
-        previous_eta_by_order_id={},
-        route_solution=route_solution,
     )
 
-    assert len(events) == 2
     assert {event["order_id"] for event in events} == {1, 2}
     assert {event["payload"]["reason"] for event in events} == {"plan_window_changed"}
+    # The plan's own notification reports the move.
+    assert all(event["payload"]["notification_suppressed"] for event in events)
 
 
-def test_build_order_rescheduled_events_includes_ready_eta_changes_only(monkeypatch):
-    team_id = 10
-    ready_order = SimpleNamespace(id=3, team_id=team_id)
+def test_unchanged_plan_dates_reschedule_nothing():
     route_plan = SimpleNamespace(
         start_date=datetime(2026, 3, 1, 0, 0, tzinfo=timezone.utc),
         end_date=datetime(2026, 3, 1, 23, 0, tzinfo=timezone.utc),
-        orders=[],
-    )
-    route_solution = SimpleNamespace(
-        stops=[
-            SimpleNamespace(
-                order_id=3,
-                expected_arrival_time=datetime(2026, 3, 1, 11, 0, tzinfo=timezone.utc),
-            )
-        ]
+        orders=[SimpleNamespace(id=1, team_id=10)],
     )
 
-    class _QueryStub:
-        def filter(self, *_args, **_kwargs):
-            return self
-
-        def all(self):
-            return [ready_order]
-
-    monkeypatch.setattr(module.db.session, "query", lambda *_args, **_kwargs: _QueryStub())
-
-    events = module._build_order_rescheduled_events_for_route_group_update(
-        ctx=SimpleNamespace(team_id=team_id),
+    assert module._build_plan_window_rescheduled_events(
+        ctx=SimpleNamespace(team_id=10),
         route_plan=route_plan,
         previous_plan_start=route_plan.start_date,
         previous_plan_end=route_plan.end_date,
-        previous_eta_by_order_id={
-            3: datetime(2026, 3, 1, 10, 0, tzinfo=timezone.utc),
-        },
-        route_solution=route_solution,
-    )
-
-    assert len(events) == 1
-    assert events[0]["order_id"] == 3
-    assert events[0]["event_name"] == "order_rescheduled"
-    assert events[0]["payload"]["reason"] == "eta_changed"
-
-
-def test_build_order_rescheduled_events_detects_ready_eta_when_stop_appears(monkeypatch):
-    team_id = 10
-    ready_order = SimpleNamespace(id=4, team_id=team_id)
-    route_plan = SimpleNamespace(
-        start_date=datetime(2026, 3, 1, 0, 0, tzinfo=timezone.utc),
-        end_date=datetime(2026, 3, 1, 23, 0, tzinfo=timezone.utc),
-        orders=[],
-    )
-    route_solution = SimpleNamespace(
-        stops=[
-            SimpleNamespace(
-                order_id=4,
-                expected_arrival_time=datetime(2026, 3, 1, 12, 30, tzinfo=timezone.utc),
-            )
-        ]
-    )
-
-    class _QueryStub:
-        def filter(self, *_args, **_kwargs):
-            return self
-
-        def all(self):
-            return [ready_order]
-
-    monkeypatch.setattr(module.db.session, "query", lambda *_args, **_kwargs: _QueryStub())
-
-    events = module._build_order_rescheduled_events_for_route_group_update(
-        ctx=SimpleNamespace(team_id=team_id),
-        route_plan=route_plan,
-        previous_plan_start=route_plan.start_date,
-        previous_plan_end=route_plan.end_date,
-        previous_eta_by_order_id={},
-        route_solution=route_solution,
-    )
-
-    assert len(events) == 1
-    assert events[0]["order_id"] == 4
-    assert events[0]["payload"]["reason"] == "eta_changed"
+    ) == []

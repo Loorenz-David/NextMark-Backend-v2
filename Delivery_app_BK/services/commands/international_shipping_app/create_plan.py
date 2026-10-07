@@ -16,6 +16,7 @@ from Delivery_app_BK.models import (
     RoutePlan,
     RoutePlanState,
     Team,
+    User,
     db,
 )
 from Delivery_app_BK.services.commands.order.update_order_route_plan import (
@@ -107,6 +108,7 @@ def create_international_shipping_plan(ctx: ServiceContext) -> dict:
     if pending_order_events:
         emit_order_events(ctx, pending_order_events)
 
+    actor = db.session.get(User, ctx.user_id) if ctx.user_id else None
     for bundle in created_bundles:
         route_plan_payload = bundle["route_plan"]
         notify_delivery_planning_event(
@@ -122,7 +124,7 @@ def create_international_shipping_plan(ctx: ServiceContext) -> dict:
                 "date_strategy": route_plan_payload["date_strategy"],
             },
             occurred_at=datetime.now(timezone.utc),
-            actor=None,
+            actor=actor,
         )
 
     return {"created": created_bundles}

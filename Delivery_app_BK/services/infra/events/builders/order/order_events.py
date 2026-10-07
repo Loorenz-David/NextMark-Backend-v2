@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import uuid4
 
 from Delivery_app_BK.models import DeliveryPlan, Order
 from Delivery_app_BK.services.domain.order.plan_objective_labels import (
@@ -185,6 +186,27 @@ def build_delivery_rescheduled_event(
     }
 
 
+def build_order_arrival_changed_event(
+    order_instance: Order,
+    *,
+    old_expected_arrival: datetime,
+    new_expected_arrival: datetime,
+    cause: str,
+) -> dict:
+    """History entry for an arrival that moved within the order's route;
+    `cause` names the route action (e.g. "stops_reordered")."""
+    return {
+        "order_id": order_instance.id,
+        "team_id": order_instance.team_id,
+        "event_name": OrderEvent.ARRIVAL_CHANGED.value,
+        "payload": {
+            "old_expected_arrival": old_expected_arrival.isoformat(),
+            "new_expected_arrival": new_expected_arrival.isoformat(),
+            "cause": cause,
+        },
+    }
+
+
 def build_route_plan_changed_event(
     order_instance: Order,
     old_plan_id: int | None,
@@ -208,6 +230,52 @@ def build_route_plan_changed_event(
             "new_date_strategy": new_date_strategy,
         },
     }
+
+
+def fold_into_plan_change_notification(events: list[dict]) -> list[dict]:
+    """One notification per order for a plan move.
+
+    Scheduling an order emits several events — the plan change, the delivery
+    reschedule and, for a draft, its confirmation. Each stays in the history
+    (and may send customer messages), but only the plan change notifies: the
+    others point at it, and it carries their status change and dates.
+    """
+    lead_by_order_id: dict[int, dict] = {}
+    for event in events:
+        if (
+            event.get("event_name") == OrderEvent.DELIVERY_PLAN_CHANGED.value
+            and event.get("order_id") not in lead_by_order_id
+        ):
+            event.setdefault("event_id", str(uuid4()))
+            lead_by_order_id[event.get("order_id")] = event
+
+    for event in events:
+        lead = lead_by_order_id.get(event.get("order_id"))
+        if lead is None or event is lead:
+            continue
+        payload = {
+            **(event.get("payload") or {}),
+            "notification_folded_into": lead["event_id"],
+        }
+        event["payload"] = payload
+        if event.get("event_name") == OrderEvent.STATUS_CHANGED.value:
+            lead["payload"] = {
+                **(lead.get("payload") or {}),
+                "notification_old_order_state_id": payload.get("old_order_state_id"),
+                "notification_new_order_state_id": payload.get("new_order_state_id"),
+            }
+        elif event.get("event_name") == OrderEvent.DELIVERY_RESCHEDULED.value:
+            # The delivery dates are what tells "scheduled for Oct 19" or
+            # "rescheduled Oct 17 → Oct 19" apart from a plain plan move.
+            lead["payload"] = {
+                **(lead.get("payload") or {}),
+                "notification_old_plan_start": payload.get("old_plan_start"),
+                "notification_old_plan_end": payload.get("old_plan_end"),
+                "notification_new_plan_start": payload.get("new_plan_start"),
+                "notification_new_plan_end": payload.get("new_plan_end"),
+            }
+
+    return events
 
 
 def build_order_state_transition_events(

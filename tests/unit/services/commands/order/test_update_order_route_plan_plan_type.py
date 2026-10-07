@@ -204,3 +204,9 @@ def test_local_destination_still_resolves_route_groups(monkeypatch):
 
     assert order.route_group_id == 42
     assert order.order_plan_objective == "local_delivery"
+
+
+@pytest.fixture(autouse=True)
+def _no_arrival_tracking(monkeypatch):
+    # Arrival tracking reads the routes from the database; it has its own tests.
+    monkeypatch.setattr(module, "snapshot_route_arrivals", lambda *_args, **_kwargs: None)

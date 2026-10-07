@@ -7,6 +7,11 @@ from Delivery_app_BK.services.domain.route_operations.local_delivery.route_lifec
 )
 
 from Delivery_app_BK.services.context import ServiceContext
+from Delivery_app_BK.services.commands.route_plan.local_delivery.arrival_tracking import (
+    collect_arrival_changes,
+    snapshot_route_arrivals,
+)
+from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
 from Delivery_app_BK.services.queries.get_instance import get_instance
 from Delivery_app_BK.sockets.emitters.route_solution_events import emit_route_solution_deleted_for_route_group
 
@@ -26,10 +31,13 @@ def delete_route_solution(ctx: ServiceContext):
     plan_type = route_plan.plan_type if route_plan is not None else None
     team_id = route_solution.team_id
     actor = db.session.get(User, ctx.user_id) if ctx.user_id else None
+    # Deleting the selected variant promotes another, moving every arrival.
+    arrival_snapshot = snapshot_route_arrivals(team_id, [route_group_id])
     db.session.delete(route_solution)
     db.session.flush()
     ensure_single_selected_route_solution(route_group_id)
     db.session.commit()
+    arrival_outcome = collect_arrival_changes(arrival_snapshot, cause="variant_deleted")
     emit_route_solution_deleted_for_route_group(
         team_id=team_id,
         route_group_id=route_group_id,
@@ -38,7 +46,10 @@ def delete_route_solution(ctx: ServiceContext):
             "label": solution_label,
             "plan_label": plan_label,
             "plan_type": plan_type,
+            **arrival_outcome.notification_payload,
         },
         actor=actor,
     )
+    if arrival_outcome.events:
+        emit_order_events(ctx, arrival_outcome.events)
     return {"route_solution": route_solution.id}

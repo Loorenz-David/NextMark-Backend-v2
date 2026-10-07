@@ -10,8 +10,11 @@ from Delivery_app_BK.services.domain.messaging import (
     event_supports_future_anchor,
     resolve_order_message_plan_type,
     resolve_route_plan_message_plan_type,
+    should_message_order_customer,
 )
 from Delivery_app_BK.services.infra.messaging.template_resolver import resolve_message_template
+
+ORDER_HAS_NO_PLAN_OBJECTIVE_SKIP_REASON = "order_has_no_plan_objective"
 
 
 @dataclass(frozen=True)
@@ -25,15 +28,25 @@ class ResolvedActionSchedule:
 
 def resolve_order_action_schedule(order_event, action_name: str) -> ResolvedActionSchedule | None:
     channel = _resolve_channel(action_name)
+    order = getattr(order_event, "order", None)
     template = resolve_message_template(
         team_id=getattr(order_event, "team_id", None),
         channel=channel,
         event_name=order_event.event_name,
-        plan_type=resolve_order_message_plan_type(getattr(order_event, "order", None)),
+        plan_type=resolve_order_message_plan_type(order),
         enabled_only=True,
     )
     if template is None:
         return None
+
+    if not should_message_order_customer(order):
+        return ResolvedActionSchedule(
+            template_id=template.id,
+            scheduled_for=None,
+            schedule_anchor_type=None,
+            schedule_anchor_at=None,
+            skip_reason=ORDER_HAS_NO_PLAN_OBJECTIVE_SKIP_REASON,
+        )
 
     anchor_type, anchor_at, skip_reason = _resolve_order_anchor(order_event)
     if skip_reason:

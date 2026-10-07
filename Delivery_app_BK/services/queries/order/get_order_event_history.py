@@ -1,7 +1,8 @@
 from sqlalchemy.orm import selectinload
 
 from Delivery_app_BK.errors import NotFound
-from Delivery_app_BK.models import ItemState, Order, OrderAuditLog, OrderEvent, User, UserRole, db
+from Delivery_app_BK.models import ItemState, Order, OrderAuditLog, OrderEvent, RoutePlan, User, UserRole, db
+from Delivery_app_BK.services.domain.order.audit import ROUTE_PLAN_FIELD
 from Delivery_app_BK.services.domain.order.order_events import resolve_order_event_origin
 from Delivery_app_BK.services.domain.user import resolve_user_role_id_for_team
 
@@ -76,28 +77,46 @@ def _load_changes_by_event_id(
         audit_query = audit_query.filter(OrderAuditLog.team_id == ctx.team_id)
     rows = audit_query.order_by(OrderAuditLog.id.asc()).all()
 
-    item_state_names_by_id = _load_item_state_names(rows)
+    labels_by_field = {
+        ITEM_STATE_FIELD: _load_item_state_names(rows),
+        ROUTE_PLAN_FIELD: _load_plan_labels(rows, ctx),
+    }
     changes_by_event_id: dict[str, list[dict]] = {}
     for row in rows:
         changes_by_event_id.setdefault(row.event_id, []).append(
-            serialize_order_audit_change(row, item_state_names_by_id)
+            serialize_order_audit_change(row, labels_by_field)
         )
     return changes_by_event_id
 
 
-def _load_item_state_names(rows: list) -> dict[int, str]:
-    state_ids = {
+def _field_ids(rows: list, field_name: str) -> set[int]:
+    return {
         value
         for row in rows
-        if row.field_name == ITEM_STATE_FIELD
+        if row.field_name == field_name
         for value in (row.from_value, row.to_value)
         if isinstance(value, int)
     }
+
+
+def _load_item_state_names(rows: list) -> dict[int, str]:
+    state_ids = _field_ids(rows, ITEM_STATE_FIELD)
     if not state_ids:
         return {}
 
     states = db.session.query(ItemState).filter(ItemState.id.in_(state_ids)).all()
     return {state.id: state.name for state in states}
+
+
+def _load_plan_labels(rows: list, ctx: ServiceContext) -> dict[int, str]:
+    plan_ids = _field_ids(rows, ROUTE_PLAN_FIELD)
+    if not plan_ids:
+        return {}
+
+    plan_query = db.session.query(RoutePlan).filter(RoutePlan.id.in_(plan_ids))
+    if ctx.team_id:
+        plan_query = plan_query.filter(RoutePlan.team_id == ctx.team_id)
+    return {plan.id: plan.label for plan in plan_query.all() if plan.label}
 
 
 def _relayed_by_user_id(event) -> int | None:

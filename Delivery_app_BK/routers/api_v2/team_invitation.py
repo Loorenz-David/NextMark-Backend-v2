@@ -154,7 +154,9 @@ def create_team_invitation():
 @role_required([ADMIN, ASSISTANT])
 def accept_team_invitation(invite_id: int):
     identity = get_jwt()
+    incoming_data = request.get_json(silent=True) or {}
     ctx = ServiceContext(
+        incoming_data=incoming_data,
         identity=identity,
     )
     outcome = run_service(

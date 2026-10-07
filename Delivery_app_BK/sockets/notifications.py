@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from hashlib import sha1
 
 from flask import request
@@ -12,14 +13,17 @@ from Delivery_app_BK.models import (
     BaseRole,
     RouteGroup,
     Order,
+    RoutePlan,
     RouteSolution,
     RouteSolutionStop,
+    Team,
     User,
     UserRole,
     db,
 )
 from Delivery_app_BK.services.domain.order.audit import label_order_changes, summarize_change_labels
 from Delivery_app_BK.services.domain.order.order_events import (
+    OrderEvent as OrderEventName,
     ORDER_EVENT_ORIGIN_CLIENT,
     ORDER_EVENT_ORIGIN_SYSTEM,
     ORDER_EVENT_ORIGIN_USER,
@@ -80,6 +84,28 @@ ORDER_EVENT_FOCUS_NOTIFICATION_EVENT_NAMES = {
     "order.state_changed",
 }
 NOTIFICATION_CHANGE_LABEL_LIMIT = 3
+
+# Headline verbs for "<actor> <verb> Route "variant 1"" by route change hint.
+ROUTE_UPDATE_VERBS = {
+    "stops_reordered": "reordered stops on",
+    "service_time_updated": "changed service times on",
+    "route_optimized": "optimized",
+    "variant_selected": "switched to",
+    "settings_updated": "updated the settings of",
+    "driver_assigned": "assigned a driver to",
+}
+ARRIVAL_PREVIEW_LIMIT = 2
+
+PLAN_MOVE_SCHEDULED = "scheduled"
+PLAN_MOVE_RESCHEDULED = "rescheduled"
+PLAN_MOVE_MOVED = "moved"
+PLAN_MOVE_UNSCHEDULED = "unscheduled"
+PLAN_MOVE_TITLES = {
+    PLAN_MOVE_SCHEDULED: "Order scheduled",
+    PLAN_MOVE_RESCHEDULED: "Order rescheduled",
+    PLAN_MOVE_MOVED: "Order moved",
+    PLAN_MOVE_UNSCHEDULED: "Order unscheduled",
+}
 
 ORDER_STATE_NAME_BY_ID = {
     OrderStateId.DRAFT: OrderStateDomain.DRAFT.value,
@@ -175,19 +201,28 @@ def notify_order_event(
         payload,
         actor.id if actor else None,
     )
-    change_labels = _resolve_order_change_labels(
-        event_name=event_name,
-        event_id=event_id,
-        team_id=team_id,
-        order_id=order_id,
-        payload=payload,
-        origin=origin,
+    plan_move = _resolve_plan_move(payload, order)
+    # A plan move describes itself (from where to where, when); its recorded
+    # field changes would only repeat that as "Plan, Delivery date".
+    change_labels = (
+        []
+        if plan_move
+        else _resolve_order_change_labels(
+            event_name=event_name,
+            event_id=event_id,
+            team_id=team_id,
+            order_id=order_id,
+            payload=payload,
+            origin=origin,
+        )
     )
     payload = {
         **payload,
         "notification_origin": origin,
         "notification_change_labels": change_labels,
+        **plan_move,
     }
+    plan_move_action = payload.get("notification_plan_move_action")
     actor_role = _resolve_actor_role_label(actor, team_id)
     subject_label = _build_order_label(order)
     focus_event_id = _resolve_order_focus_event_id(event_name=event_name, event_id=event_id, payload=payload)
@@ -225,7 +260,7 @@ def notify_order_event(
             actor=actor,
             actor_kind=origin,
             actor_role=actor_role,
-            title=_build_order_notification_title(event_name, origin),
+            title=_build_order_notification_title(event_name, origin, plan_move_action),
             description=_build_notification_description(
                 event_name=event_name,
                 order=order,
@@ -236,6 +271,8 @@ def notify_order_event(
             related_ids=_build_related_ids(payload=payload, order_id=order_id),
             subject_label=subject_label,
             change_labels=change_labels,
+            action_label=plan_move_action,
+            detail=_build_plan_move_detail(payload) if plan_move_action else None,
         )
         _store_and_emit_notification(recipient["user_id"], recipient["app_scope"], notification)
 
@@ -380,7 +417,10 @@ def notify_delivery_planning_event(
     payload: dict | None,
     occurred_at,
     actor: User | None,
+    notify_admins: bool = True,
 ) -> None:
+    """`notify_admins=False` reaches only the route's drivers — for a change
+    admins already hear about through a broader notification."""
     if team_id is None or event_name not in DELIVERY_PLANNING_NOTIFICATION_EVENT_NAMES:
         return
 
@@ -389,8 +429,13 @@ def notify_delivery_planning_event(
     route_group_id = _resolve_route_group_id(payload)
     driver_id = _parse_int(payload.get("driver_id")) or _parse_int(payload.get("old_driver_id"))
 
+    admin_recipients = (
+        resolve_admin_notification_recipients(team_id=team_id, actor_user_id=actor.id if actor else None)
+        if notify_admins
+        else []
+    )
     recipients = [
-        *(resolve_admin_notification_recipients(team_id=team_id, actor_user_id=actor.id if actor else None)),
+        *admin_recipients,
         *(
             resolve_driver_notification_recipients(
                 team_id=team_id,
@@ -412,6 +457,12 @@ def notify_delivery_planning_event(
     )
     occurred_iso = _to_iso_string(occurred_at)
     actor_role = _resolve_actor_role_label(actor, team_id)
+    payload = {
+        **payload,
+        "notification_arrival_summary": _summarize_arrival_changes(payload, team_id),
+    }
+    subject_label, action_label = _resolve_planning_headline(event_name, payload)
+    detail = _build_planning_detail(event_name, payload)
 
     for recipient in recipients:
         target = _build_notification_target(
@@ -445,6 +496,9 @@ def notify_delivery_planning_event(
             occurred_at=occurred_iso,
             target=target,
             related_ids=_build_related_ids(payload=payload),
+            subject_label=subject_label,
+            action_label=action_label,
+            detail=detail,
         )
         _store_and_emit_notification(recipient["user_id"], recipient["app_scope"], notification)
 
@@ -604,6 +658,8 @@ def build_notification_item(
     actor_role: str | None = None,
     subject_label: str | None = None,
     change_labels: list[str] | None = None,
+    action_label: str | None = None,
+    detail: str | None = None,
 ) -> dict:
     notification_id = _build_notification_id(event_id=event_id, recipient_user_id=recipient_user_id, app_scope=app_scope)
     payload = {
@@ -625,6 +681,10 @@ def build_notification_item(
     }
     if subject_label:
         payload["subject_label"] = subject_label
+    if action_label:
+        payload["action_label"] = action_label
+    if detail:
+        payload["detail"] = detail
     if change_labels:
         payload["change_labels"] = change_labels[:NOTIFICATION_CHANGE_LABEL_LIMIT]
         payload["change_count"] = len(change_labels)
@@ -694,9 +754,16 @@ def _build_notification_title(event_name: str) -> str:
     return mapping.get(event_name, "New update")
 
 
-def _build_order_notification_title(event_name: str, origin: str) -> str:
-    if event_name == ORDER_UPDATED_NOTIFICATION_EVENT_NAME and origin == ORDER_EVENT_ORIGIN_CLIENT:
-        return "Client form submitted"
+def _build_order_notification_title(
+    event_name: str,
+    origin: str,
+    plan_move_action: str | None = None,
+) -> str:
+    if event_name == ORDER_UPDATED_NOTIFICATION_EVENT_NAME:
+        if plan_move_action in PLAN_MOVE_TITLES:
+            return PLAN_MOVE_TITLES[plan_move_action]
+        if origin == ORDER_EVENT_ORIGIN_CLIENT:
+            return "Client form submitted"
     return _build_notification_title(event_name)
 
 
@@ -753,7 +820,18 @@ def _describe_route_plan_created(order: Order | None, payload: dict) -> str:
 
 
 def _describe_route_plan_updated(order: Order | None, payload: dict) -> str:
-    return f"{_resolve_plan_label(payload)} was updated."
+    plan_label = _resolve_plan_label(payload)
+    changes = [
+        change
+        for change in (payload.get("notification_plan_changes") or [])
+        if isinstance(change, str) and change
+    ]
+    description = (
+        f"{plan_label}: {_join_with_and(changes)} updated."
+        if changes
+        else f"{plan_label} was updated."
+    )
+    return _append_arrival_summary(description, payload)
 
 
 def _describe_route_plan_deleted(order: Order | None, payload: dict) -> str:
@@ -779,10 +857,20 @@ def _describe_route_solution_updated(order: Order | None, payload: dict) -> str:
     if hint == "driver_assigned":
         return f"{route_subject} - driver was assigned."
     if hint == "route_optimized":
-        return f"{route_subject} was optimized."
+        return _append_arrival_summary(f"{route_subject} was optimized.", payload)
     if hint == "times_updated":
         return f"{route_subject} - arrival times were updated."
-    return f"{route_subject} was updated."
+    if hint == "settings_updated":
+        description = f"{route_subject} - settings were updated."
+    elif hint == "stops_reordered":
+        description = f"{route_subject} - stops were reordered."
+    elif hint == "service_time_updated":
+        description = f"{route_subject} - service times were updated."
+    elif hint == "variant_selected":
+        description = f"{route_subject} is now the selected variant."
+    else:
+        description = f"{route_subject} was updated."
+    return _append_arrival_summary(description, payload)
 
 
 def _describe_route_solution_deleted(order: Order | None, payload: dict) -> str:
@@ -795,8 +883,10 @@ def _describe_route_solution_deleted(order: Order | None, payload: dict) -> str:
             else "Route plan" if plan_type == "route_plan"
             else "Plan"
         )
-        return f'{route_label} on {prefix} "{plan_label.strip()}" was deleted.'
-    return f"{route_label} was deleted."
+        return _append_arrival_summary(
+            f'{route_label} on {prefix} "{plan_label.strip()}" was deleted.', payload
+        )
+    return _append_arrival_summary(f"{route_label} was deleted.", payload)
 
 
 def _describe_route_solution_stop_updated(order: Order | None, payload: dict) -> str:
@@ -842,6 +932,12 @@ def _build_notification_description(*, event_name: str, order: Order | None, pay
 
 
 def _build_order_updated_description(*, order_label: str, payload: dict) -> str:
+    plan_move_action = payload.get("notification_plan_move_action")
+    if plan_move_action in PLAN_MOVE_TITLES:
+        description = _describe_plan_move(order_label, payload)
+        status_change = _describe_plan_move_status_change(payload)
+        return f"{description} ({status_change})." if status_change else f"{description}."
+
     labels = payload.get("notification_change_labels")
     change_summary = summarize_change_labels(labels if isinstance(labels, list) else [])
     origin = payload.get("notification_origin") or resolve_order_event_origin(
@@ -951,6 +1047,11 @@ def _resolve_preview_order(
 
 
 def _should_suppress_order_notification(payload: dict) -> bool:
+    # Part of an action another event of the same order already reports
+    # (e.g. the reschedule and confirmation that come with scheduling it).
+    if payload.get("notification_folded_into") or payload.get("notification_suppressed"):
+        return True
+
     original_event_name = payload.get("original_event_name")
     if not isinstance(original_event_name, str):
         return False
@@ -1043,7 +1144,7 @@ def _build_notification_target(
         }
 
     if event_name in {"order.created", "order.updated", "order.state_changed"} and order_id is not None:
-        params = {"orderId": order_id}
+        params = {"orderId": order_id, **_order_plan_params(order)}
         if order_event_id:
             params["orderEventId"] = order_event_id
         return {
@@ -1075,6 +1176,24 @@ def _build_notification_target(
         }
 
     return None
+
+
+LOCAL_DELIVERY_PLAN_OBJECTIVE = "local_delivery"
+
+
+def _order_plan_params(order: Order | None) -> dict:
+    """Where a local-delivery order lives, so opening it can open its plan
+    first — the same context as opening it from the plan."""
+    if order is None or getattr(order, "order_plan_objective", None) != LOCAL_DELIVERY_PLAN_OBJECTIVE:
+        return {}
+    params = {}
+    plan_id = _parse_int(getattr(order, "route_plan_id", None))
+    if plan_id is not None:
+        params["planId"] = plan_id
+        route_group_id = _parse_int(getattr(order, "route_group_id", None))
+        if route_group_id is not None:
+            params["routeGroupId"] = route_group_id
+    return params
 
 
 def _resolve_old_order_state_name(*, payload: dict) -> str | None:
@@ -1242,6 +1361,114 @@ def _resolve_route_subject_label(payload: dict) -> str:
     return route_label
 
 
+def _summarize_arrival_changes(payload: dict, team_id: int | None) -> str | None:
+    """"5 arrival times changed · Order #4505 08:30 → 09:10 +4 more" from the
+    arrival preview a route action attaches (see arrival_tracking)."""
+    count = _parse_int(payload.get("notification_arrival_change_count"))
+    if not count:
+        return None
+    time_zone = _team_time_zone(team_id)
+    previews: list[str] = []
+    for entry in (payload.get("notification_arrival_changes") or [])[:ARRIVAL_PREVIEW_LIMIT]:
+        if not isinstance(entry, dict):
+            continue
+        order_id = _parse_int(entry.get("order_id"))
+        order = db.session.get(Order, order_id) if order_id is not None else None
+        times = _format_arrival_move(entry.get("old_arrival"), entry.get("new_arrival"), time_zone)
+        if order is not None and times:
+            previews.append(f"{_build_order_label(order)} {times}")
+
+    headline = "1 arrival time changed" if count == 1 else f"{count} arrival times changed"
+    if not previews:
+        return headline
+    remaining = count - len(previews)
+    # " · " so the app can show each moved order on its own line.
+    preview = " · ".join(previews) + (f" +{remaining} more" if remaining > 0 else "")
+    return f"{headline} · {preview}"
+
+
+def _format_arrival_move(old: object, new: object, time_zone: ZoneInfo) -> str | None:
+    old_at = _parse_iso_datetime(old)
+    new_at = _parse_iso_datetime(new)
+    if old_at is None or new_at is None:
+        return None
+    old_local = old_at.astimezone(time_zone)
+    new_local = new_at.astimezone(time_zone)
+    if old_local.date() == new_local.date():
+        return f"{old_local:%H:%M} → {new_local:%H:%M}"
+    return (
+        f"{old_local:%b} {old_local.day} {old_local:%H:%M} → "
+        f"{new_local:%b} {new_local.day} {new_local:%H:%M}"
+    )
+
+
+def _parse_iso_datetime(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _team_time_zone(team_id: int | None) -> ZoneInfo:
+    team = db.session.get(Team, team_id) if team_id is not None else None
+    try:
+        return ZoneInfo(getattr(team, "time_zone", None) or "UTC")
+    except ZoneInfoNotFoundError:
+        return ZoneInfo("UTC")
+
+
+def _append_arrival_summary(description: str, payload: dict) -> str:
+    summary = payload.get("notification_arrival_summary")
+    return f"{description} {summary}." if summary else description
+
+
+def _resolve_planning_headline(event_name: str, payload: dict) -> tuple[str | None, str | None]:
+    """Subject and verb for "<actor> <verb> <subject>" on route and plan
+    updates; (None, None) keeps the plain title layout."""
+    if event_name == "route_solution.updated":
+        verb = ROUTE_UPDATE_VERBS.get(payload.get("notification_change_hint"))
+        return (_resolve_route_label(payload), verb) if verb else (None, None)
+    if event_name == "route_plan.updated":
+        return _resolve_plan_label(payload), "updated"
+    return None, None
+
+
+def _build_planning_detail(event_name: str, payload: dict) -> str | None:
+    """The in-app line under the headline: what changed, then arrivals."""
+    parts: list[str] = []
+    if event_name == "route_plan.updated":
+        changes = [
+            change
+            for change in (payload.get("notification_plan_changes") or [])
+            if isinstance(change, str) and change
+        ]
+        if changes:
+            joined = _join_with_and(changes)
+            parts.append(joined[:1].upper() + joined[1:] + " updated")
+    elif event_name == "route_solution.updated":
+        if payload.get("notification_change_hint") not in ROUTE_UPDATE_VERBS:
+            return None
+        plan_label = payload.get("plan_label")
+        if isinstance(plan_label, str) and plan_label.strip():
+            parts.append(plan_label.strip())
+    else:
+        return None
+
+    summary = payload.get("notification_arrival_summary")
+    if summary:
+        parts.append(summary)
+    return " · ".join(parts) or None
+
+
+def _join_with_and(parts: list[str]) -> str:
+    if len(parts) <= 1:
+        return "".join(parts)
+    return f"{', '.join(parts[:-1])} and {parts[-1]}"
+
+
 def _parse_int(value: object) -> int | None:
     if isinstance(value, int):
         return value
@@ -1274,6 +1501,149 @@ def _resolve_order_change_labels(
         rows,
         replacements_only=origin == ORDER_EVENT_ORIGIN_CLIENT,
     )
+
+
+def _resolve_plan_move(payload: dict, order: Order | None = None) -> dict:
+    """How an order's delivery moved: scheduled, rescheduled (its dates
+    changed), moved to another plan on the same dates, or unscheduled — with
+    the plan's label and the dates before and after.
+
+    Read from a plan-change event (which carries its folded reschedule's
+    dates) or from a reschedule on its own, e.g. when its plan's dates move.
+    """
+    event_name = payload.get("original_event_name")
+    from_plan_id = None
+    if event_name == OrderEventName.DELIVERY_PLAN_CHANGED.value:
+        old_plan_id = _parse_int(payload.get("old_route_plan_id") or payload.get("old_delivery_plan_id"))
+        new_plan_id = _parse_int(payload.get("new_route_plan_id") or payload.get("new_delivery_plan_id"))
+        old_dates = _format_plan_dates(
+            payload.get("notification_old_plan_start"), payload.get("notification_old_plan_end")
+        )
+        new_dates = _format_plan_dates(
+            payload.get("notification_new_plan_start"), payload.get("notification_new_plan_end")
+        )
+        if new_plan_id is None and old_plan_id is None:
+            return {}
+        if new_plan_id is None:
+            action, plan_id = PLAN_MOVE_UNSCHEDULED, old_plan_id
+        elif old_plan_id is None:
+            action, plan_id = PLAN_MOVE_SCHEDULED, new_plan_id
+        elif old_dates and new_dates and old_dates != new_dates:
+            action, plan_id, from_plan_id = PLAN_MOVE_RESCHEDULED, new_plan_id, old_plan_id
+        else:
+            action, plan_id, from_plan_id = PLAN_MOVE_MOVED, new_plan_id, old_plan_id
+    elif event_name == OrderEventName.DELIVERY_RESCHEDULED.value:
+        old_dates = _format_plan_dates(payload.get("old_plan_start"), payload.get("old_plan_end"))
+        new_dates = _format_plan_dates(payload.get("new_plan_start"), payload.get("new_plan_end"))
+        if not new_dates or old_dates == new_dates:
+            return {}
+        action = PLAN_MOVE_RESCHEDULED if old_dates else PLAN_MOVE_SCHEDULED
+        plan_id = _parse_int(getattr(order, "route_plan_id", None))
+    else:
+        return {}
+
+    plan = db.session.get(RoutePlan, plan_id) if plan_id is not None else None
+    plan_label = (
+        _resolve_plan_label({"label": plan.label, "plan_type": plan.plan_type})
+        if plan is not None
+        else None
+    )
+    from_plan = db.session.get(RoutePlan, from_plan_id) if from_plan_id is not None else None
+    return {
+        "notification_plan_move_action": action,
+        "notification_plan_label": plan_label,
+        # Bare plan names for "Plan A → Plan B" when it moved between plans.
+        "notification_from_plan_name": _plan_name(from_plan),
+        "notification_to_plan_name": _plan_name(plan) if from_plan is not None else None,
+        "notification_old_dates": old_dates,
+        "notification_new_dates": new_dates,
+    }
+
+
+def _plan_name(plan: RoutePlan | None) -> str | None:
+    label = getattr(plan, "label", None)
+    return label.strip() if isinstance(label, str) and label.strip() else None
+
+
+def _plan_route_text(payload: dict) -> str | None:
+    """"Plan for October 17 → Plan for October 19" for a move between plans."""
+    from_name = payload.get("notification_from_plan_name")
+    to_name = payload.get("notification_to_plan_name")
+    return f"{from_name} → {to_name}" if from_name and to_name else None
+
+
+def _format_plan_dates(start: object, end: object) -> str | None:
+    """"Oct 19" or "Oct 19 – Oct 21". Plan dates are stored as calendar days
+    at UTC midnight, so their own date part is the day — no zone shift."""
+    start_day = _parse_iso_date(start)
+    if start_day is None:
+        return None
+    end_day = _parse_iso_date(end)
+    start_label = f"{start_day:%b} {start_day.day}"
+    if end_day is None or end_day == start_day:
+        return start_label
+    return f"{start_label} – {end_day:%b} {end_day.day}"
+
+
+def _parse_iso_date(value: object):
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return datetime.fromisoformat(value.strip()).date()
+    except ValueError:
+        return None
+
+
+def _describe_plan_move(order_label: str, payload: dict) -> str:
+    action = payload.get("notification_plan_move_action")
+    plan_label = payload.get("notification_plan_label")
+    old_dates = payload.get("notification_old_dates")
+    new_dates = payload.get("notification_new_dates")
+
+    if action == PLAN_MOVE_UNSCHEDULED:
+        return f"{order_label} removed from {plan_label or 'its plan'}"
+    plan_route = _plan_route_text(payload)
+    if action == PLAN_MOVE_RESCHEDULED:
+        description = f"{order_label} rescheduled from {old_dates} to {new_dates}"
+        if plan_route:
+            return f"{description} ({plan_route})"
+        return f"{description} on {plan_label}" if plan_label else description
+    if action == PLAN_MOVE_SCHEDULED:
+        description = f"{order_label} scheduled for {new_dates}" if new_dates else f"{order_label} scheduled"
+        return f"{description} on {plan_label}" if plan_label else description
+    if plan_route:
+        return f"{order_label} moved from {payload.get('notification_from_plan_name')} to {payload.get('notification_to_plan_name')}"
+    return f"{order_label} moved to {plan_label or 'another plan'}"
+
+
+def _describe_plan_move_status_change(payload: dict) -> str | None:
+    old_name = ORDER_STATE_NAME_BY_ID.get(_parse_int(payload.get("notification_old_order_state_id")))
+    new_name = ORDER_STATE_NAME_BY_ID.get(_parse_int(payload.get("notification_new_order_state_id")))
+    if old_name and new_name and old_name != new_name:
+        return f"{old_name} → {new_name}"
+    return None
+
+
+def _build_plan_move_detail(payload: dict) -> str | None:
+    """The in-app line under "<actor> rescheduled Order #12": the time change
+    first (it is what matters most), then the plan and any status change."""
+    action = payload.get("notification_plan_move_action")
+    plan_label = payload.get("notification_plan_label")
+    old_dates = payload.get("notification_old_dates")
+    new_dates = payload.get("notification_new_dates")
+
+    if action == PLAN_MOVE_RESCHEDULED:
+        when = f"{old_dates} → {new_dates}"
+    elif action == PLAN_MOVE_SCHEDULED:
+        when = new_dates
+    else:
+        when = None
+    if plan_label and action == PLAN_MOVE_UNSCHEDULED:
+        plan_label = f"From {plan_label}"
+    where = _plan_route_text(payload) or plan_label
+
+    parts = [part for part in (when, where, _describe_plan_move_status_change(payload)) if part]
+    return " · ".join(parts) or None
 
 
 def _resolve_order_focus_event_id(*, event_name: str, event_id: str, payload: dict) -> str | None:

@@ -18,6 +18,10 @@ class OrderEvent(str, Enum):
     DELIVERY_RESCHEDULED = "order_rescheduled"
     CLIENT_FORM_LINK_SENT = "client_form_link_sent"
     CLIENT_FORM_SUBMITTED = "client_form_submitted"
+    # An order's expected arrival moved within its route (reorder, optimize,
+    # variant switch, …). History only: it has no handlers or notification —
+    # customers hear of new arrivals through DELIVERY_RESCHEDULED, Ready only.
+    ARRIVAL_CHANGED = "order_arrival_changed"
 
 
 # `changed_sections` values with meaning beyond display: an edit carrying

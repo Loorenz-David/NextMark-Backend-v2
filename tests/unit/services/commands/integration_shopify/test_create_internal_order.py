@@ -1,4 +1,5 @@
 import importlib
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -35,7 +36,7 @@ def test_create_internal_order_creates_costumer_before_order_when_customer_prese
     monkeypatch.setattr(
         module,
         "create_order",
-        lambda ctx: captured_create_order_ctx.setdefault("incoming_data", ctx.incoming_data),
+        lambda ctx, **_kwargs: captured_create_order_ctx.setdefault("incoming_data", ctx.incoming_data),
     )
 
     module.create_internal_order(
@@ -87,7 +88,7 @@ def test_create_internal_order_sets_plan_objective_and_filters_reserved_skus(mon
     monkeypatch.setattr(
         module,
         "create_order",
-        lambda ctx: captured_create_order_ctx.setdefault("incoming_data", ctx.incoming_data),
+        lambda ctx, **_kwargs: captured_create_order_ctx.setdefault("incoming_data", ctx.incoming_data),
     )
 
     module.create_internal_order(
@@ -121,7 +122,7 @@ def test_create_internal_order_applies_shopify_item_images_after_filtering(monke
     monkeypatch.setattr(
         module,
         "create_order",
-        lambda ctx: captured_create_order_ctx.setdefault("incoming_data", ctx.incoming_data),
+        lambda ctx, **_kwargs: captured_create_order_ctx.setdefault("incoming_data", ctx.incoming_data),
     )
 
     def _image_resolver(_integration, line_items):
@@ -161,19 +162,25 @@ def test_create_internal_order_applies_shopify_item_images_after_filtering(monke
     ]
 
 
-def test_create_internal_order_suppresses_customer_took_it_orders(monkeypatch):
+def test_create_internal_order_keeps_customer_took_it_orders_unplanned(monkeypatch):
     monkeypatch.setattr(module, "get_integration_by_shop", lambda _shop: SimpleNamespace(team_id=9))
     monkeypatch.setattr(module, "order_mapper", lambda payload: {"client_id": "order_1"})
     monkeypatch.setattr(module, "item_mapper", lambda item: {"article_number": item.get("sku")})
+    monkeypatch.setattr(
+        module,
+        "current_app",
+        SimpleNamespace(config={"UNPLANNED_ORDER_RETENTION_DAYS": 5}),
+    )
 
-    create_order_called = False
+    captured = {}
 
-    def _create_order(_ctx):
-        nonlocal create_order_called
-        create_order_called = True
+    def _create_order(ctx, *, unplanned_discard_after=None):
+        captured["fields"] = ctx.incoming_data["fields"]
+        captured["unplanned_discard_after"] = unplanned_discard_after
 
     monkeypatch.setattr(module, "create_order", _create_order)
 
+    before = datetime.now(timezone.utc)
     module.create_internal_order(
         shop="demo.myshopify.com",
         payload={
@@ -183,8 +190,32 @@ def test_create_internal_order_suppresses_customer_took_it_orders(monkeypatch):
             ],
         },
     )
+    after = datetime.now(timezone.utc)
 
-    assert create_order_called is False
+    assert captured["fields"]["order_plan_objective"] is None
+    assert captured["fields"]["items"] == [{"article_number": "SKU-1"}]
+    discard_after = captured["unplanned_discard_after"]
+    assert before + timedelta(days=5) <= discard_after <= after + timedelta(days=5)
+
+
+def test_create_internal_order_does_not_mark_planned_orders_for_discard(monkeypatch):
+    monkeypatch.setattr(module, "get_integration_by_shop", lambda _shop: SimpleNamespace(team_id=9))
+    monkeypatch.setattr(module, "order_mapper", lambda payload: {"client_id": "order_1"})
+    monkeypatch.setattr(module, "item_mapper", lambda item: {"article_number": item.get("sku")})
+
+    captured = {}
+
+    def _create_order(_ctx, *, unplanned_discard_after=None):
+        captured["unplanned_discard_after"] = unplanned_discard_after
+
+    monkeypatch.setattr(module, "create_order", _create_order)
+
+    module.create_internal_order(
+        shop="demo.myshopify.com",
+        payload={"line_items": [{"sku": "INTENT_LOCAL_DELIVERY"}, {"sku": "SKU-1"}]},
+    )
+
+    assert captured["unplanned_discard_after"] is None
 
 
 def test_create_internal_order_enriches_chair_quantity_from_metafield_set_of(monkeypatch):
@@ -208,7 +239,7 @@ def test_create_internal_order_enriches_chair_quantity_from_metafield_set_of(mon
     monkeypatch.setattr(
         module,
         "create_order",
-        lambda ctx: captured_create_order_ctx.setdefault("incoming_data", ctx.incoming_data),
+        lambda ctx, **_kwargs: captured_create_order_ctx.setdefault("incoming_data", ctx.incoming_data),
     )
     monkeypatch.setattr(
         module,
@@ -258,7 +289,7 @@ def test_create_internal_order_keeps_non_chair_quantity_without_metafield_lookup
     monkeypatch.setattr(
         module,
         "create_order",
-        lambda ctx: captured_create_order_ctx.setdefault("incoming_data", ctx.incoming_data),
+        lambda ctx, **_kwargs: captured_create_order_ctx.setdefault("incoming_data", ctx.incoming_data),
     )
     monkeypatch.setattr(
         module,

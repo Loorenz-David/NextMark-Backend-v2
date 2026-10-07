@@ -10,6 +10,7 @@ from Delivery_app_BK.services.domain.messaging import (
     MESSAGE_PLAN_TYPES,
     resolve_order_message_plan_type,
     resolve_route_plan_message_plan_type,
+    should_message_order_customer,
     validate_message_plan_type,
 )
 
@@ -77,3 +78,21 @@ def test_validate_normalizes_legacy_aliases():
 def test_validate_rejects_unknown_values(value):
     with pytest.raises(ValidationFailed, match="Invalid plan_type"):
         validate_message_plan_type(value)
+
+
+def test_order_without_plan_or_objective_is_not_messaged():
+    order = SimpleNamespace(route_plan=None, order_plan_objective=None)
+
+    assert should_message_order_customer(order) is False
+
+
+@pytest.mark.parametrize(
+    "order",
+    [
+        SimpleNamespace(route_plan=None, order_plan_objective="store_pickup"),
+        SimpleNamespace(route_plan=SimpleNamespace(plan_type="local_delivery"), order_plan_objective=None),
+        None,
+    ],
+)
+def test_order_with_plan_or_objective_is_messaged(order):
+    assert should_message_order_customer(order) is True

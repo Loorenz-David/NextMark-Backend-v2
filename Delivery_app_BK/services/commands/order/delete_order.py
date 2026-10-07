@@ -19,6 +19,11 @@ from Delivery_app_BK.services.domain.state_transitions.route_group_state_engine 
     maybe_sync_route_group_state,
 )
 
+from Delivery_app_BK.services.commands.route_plan.local_delivery.arrival_tracking import (
+    collect_arrival_changes,
+    snapshot_route_arrivals,
+)
+from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
 from ...context import ServiceContext
 from ..utils import extract_ids
 from .delete_extensions import (
@@ -54,10 +59,17 @@ def delete_order(ctx: ServiceContext):
         for order in ordered_orders
     ]
 
+    # Before the stops are removed: the orders after them on the route shift.
+    arrival_snapshot = snapshot_route_arrivals(
+        ctx.team_id,
+        [getattr(order, "route_group_id", None) for order in ordered_orders],
+    )
     extension_context = build_order_delete_extension_context(ctx, delete_deltas)
     extension_result = apply_order_delete_extensions(ctx, delete_deltas, extension_context)
+    arrival_events: list[dict] = []
 
     def _apply() -> None:
+        nonlocal arrival_events
         # Capture affected plans before deletion so we can recompute totals after flush.
         affected_plans_by_id: dict[int, RoutePlan] = {}
         affected_route_group_ids: set[int] = set()
@@ -100,6 +112,8 @@ def delete_order(ctx: ServiceContext):
         if extension_result.instances:
             db.session.add_all(extension_result.instances)
 
+        arrival_events = collect_arrival_changes(arrival_snapshot, cause="orders_removed").events
+
     try:
         with db.session.begin():
             _apply()
@@ -108,6 +122,9 @@ def delete_order(ctx: ServiceContext):
             raise
         _apply()
         db.session.commit()
+
+    if arrival_events:
+        emit_order_events(ctx, arrival_events)
 
     return {
         "deleted": {

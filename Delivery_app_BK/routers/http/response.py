@@ -2,6 +2,7 @@ from Delivery_app_BK.errors import DomainError
 from Delivery_app_BK.errors import NotFound 
 from Delivery_app_BK.errors import PermissionDenied 
 from Delivery_app_BK.errors import ValidationFailed 
+from Delivery_app_BK.errors import TeamMembershipConflict
 
 from flask import jsonify
 
@@ -17,6 +18,7 @@ class Response():
         NotFound : 414,
         PermissionDenied : 413,
         ValidationFailed : 410,
+        TeamMembershipConflict : 410,
         DomainError: 510,
     }
     

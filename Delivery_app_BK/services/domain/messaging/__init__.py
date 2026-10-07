@@ -14,6 +14,7 @@ from .plan_types import (
     MESSAGE_PLAN_TYPES,
     resolve_order_message_plan_type,
     resolve_route_plan_message_plan_type,
+    should_message_order_customer,
     validate_message_plan_type,
 )
 from .schedule_policy import (
@@ -38,6 +39,7 @@ __all__ = [
     "event_supports_future_anchor",
     "resolve_order_message_plan_type",
     "resolve_route_plan_message_plan_type",
+    "should_message_order_customer",
     "validate_manual_channels",
     "validate_manual_source_event_id",
     "validate_manual_target_orders",

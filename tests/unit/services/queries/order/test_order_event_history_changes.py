@@ -97,3 +97,21 @@ def test_item_state_changes_get_state_names(monkeypatch):
     grouped = module._load_changes_by_event_id(10, [SimpleNamespace(event_id="evt-a")], SimpleNamespace(team_id=None))
 
     assert (grouped["evt-a"][0]["from_label"], grouped["evt-a"][0]["to_label"]) == ("Open", "Packed")
+
+
+def test_plan_changes_are_named_by_the_plans_label():
+    from Delivery_app_BK.services.queries.order.serialize_order_audit_change import (
+        serialize_order_audit_change,
+    )
+
+    row = SimpleNamespace(
+        id=1, field_name="route_plan_id", entity_type="order", entity_id=None,
+        entity_label=None, from_value=5, to_value=6,
+    )
+
+    serialized = serialize_order_audit_change(
+        row, {"route_plan_id": {5: "Plan for October 17", 6: "Plan for October 19"}}
+    )
+
+    assert serialized["from_label"] == "Plan for October 17"
+    assert serialized["to_label"] == "Plan for October 19"

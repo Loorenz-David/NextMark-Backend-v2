@@ -38,6 +38,10 @@ from Delivery_app_BK.services.infra.events.builders.order import (
     mark_client_form_submission,
 )
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
+from Delivery_app_BK.services.commands.route_plan.local_delivery.arrival_tracking import (
+    collect_arrival_changes,
+    snapshot_route_arrivals,
+)
 from Delivery_app_BK.services.domain.order.order_events import (
     CLIENT_FORM_SUBMISSION_SOURCES,
     ORDER_EDIT_SECTION_CLIENT_FORM,
@@ -140,12 +144,25 @@ def update_order(ctx: ServiceContext):
     def _apply() -> None:
         nonlocal updated_orders, pending_events, order_deltas, extension_result, delivery_plans_to_touch
         updated_orders, pending_events, order_deltas = apply_order_updates(ctx, targets)
+        # A new address re-times its route from that stop on; snapshot the
+        # arrivals before the extensions re-sync it.
+        arrival_snapshot = snapshot_route_arrivals(
+            ctx.team_id,
+            [
+                getattr(delta.order_instance, "route_group_id", None)
+                for delta in order_deltas
+                if delta.flags.address_changed
+            ],
+        )
         extension_context = build_order_update_extension_context(ctx, order_deltas)
         extension_result = apply_order_update_extensions(ctx, order_deltas, extension_context)
 
         db.session.flush()
         for action in extension_result.post_flush_actions:
             action()
+        pending_events = pending_events + collect_arrival_changes(
+            arrival_snapshot, cause="address_changed"
+        ).events
 
         if extension_result.instances:
             db.session.add_all(extension_result.instances)

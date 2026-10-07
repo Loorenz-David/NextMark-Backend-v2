@@ -24,6 +24,7 @@ def _order_totals(instance: Order) -> dict:
 def serialize_created_order(instance: Order) -> dict:
     creation_date = instance.creation_date
     archive_at = instance.archive_at
+    discard_after = getattr(instance, "discard_after", None)
     metrics = _order_totals(instance)
     delivery_windows = sort_delivery_window_instances(
         list(getattr(instance, "delivery_windows", None) or []),
@@ -70,6 +71,7 @@ def serialize_created_order(instance: Order) -> dict:
         ],
         "open_order_cases": _count_open_order_cases(instance),
         "archive_at": archive_at.isoformat() if archive_at else None,
+        "discard_after": discard_after.isoformat() if discard_after else None,
         **metrics,
     }
 

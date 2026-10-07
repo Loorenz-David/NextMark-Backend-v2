@@ -121,3 +121,24 @@ def test_route_plan_schedule_asks_for_the_template_of_the_plans_type(monkeypatch
     assert captured["plan_type"] == "international_shipping"
     assert captured["channel"] == "email"
     assert captured["enabled_only"] is True
+
+
+def test_order_without_plan_or_objective_skips_customer_message(monkeypatch):
+    event = SimpleNamespace(
+        team_id=7,
+        event_name="order_created",
+        occurred_at=datetime(2026, 7, 21, 10, 0, tzinfo=timezone.utc),
+        order=SimpleNamespace(route_plan=None, order_plan_objective=None),
+    )
+    monkeypatch.setattr(
+        action_scheduling,
+        "resolve_message_template",
+        lambda **_kwargs: SimpleNamespace(id=9, schedule_offset_value=None, schedule_offset_unit=None),
+    )
+
+    schedule = action_scheduling.resolve_order_action_schedule(event, "order_created_sms")
+
+    assert schedule is not None
+    assert schedule.template_id == 9
+    assert schedule.scheduled_for is None
+    assert schedule.skip_reason == action_scheduling.ORDER_HAS_NO_PLAN_OBJECTIVE_SKIP_REASON
