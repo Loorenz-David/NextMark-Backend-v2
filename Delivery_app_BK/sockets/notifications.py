@@ -18,7 +18,22 @@ from Delivery_app_BK.models import (
     UserRole,
     db,
 )
-from Delivery_app_BK.services.domain.user import ADMIN_APP_SCOPE, DRIVER_APP_SCOPE
+from Delivery_app_BK.services.domain.order.audit import label_order_changes, summarize_change_labels
+from Delivery_app_BK.services.domain.order.order_events import (
+    ORDER_EVENT_ORIGIN_CLIENT,
+    ORDER_EVENT_ORIGIN_SYSTEM,
+    ORDER_EVENT_ORIGIN_USER,
+    resolve_order_event_origin,
+)
+from Delivery_app_BK.services.domain.user import (
+    ADMIN_APP_SCOPE,
+    DRIVER_APP_SCOPE,
+    resolve_user_role_id_for_team,
+)
+from Delivery_app_BK.services.queries.order.list_order_event_audit_changes import (
+    list_order_event_audit_changes,
+)
+from Delivery_app_BK.services.queries.user import serialize_user_actor
 from Delivery_app_BK.services.infra.web_push.sender import send_web_push_to_users
 from Delivery_app_BK.services.domain.order.order_states import OrderState as OrderStateDomain, OrderStateId
 from Delivery_app_BK.services.infra.redis import (
@@ -56,6 +71,15 @@ SUPPRESSED_DUPLICATE_ORDER_NOTIFICATION_EVENT_NAMES = {
     "order_failed",
     "order_cancelled",
 }
+
+ORDER_UPDATED_NOTIFICATION_EVENT_NAME = "order.updated"
+# Notifications whose value is the event itself, so tapping one opens the
+# order's history focused on it; for a new order the summary is the value.
+ORDER_EVENT_FOCUS_NOTIFICATION_EVENT_NAMES = {
+    ORDER_UPDATED_NOTIFICATION_EVENT_NAME,
+    "order.state_changed",
+}
+NOTIFICATION_CHANGE_LABEL_LIMIT = 3
 
 ORDER_STATE_NAME_BY_ID = {
     OrderStateId.DRAFT: OrderStateDomain.DRAFT.value,
@@ -146,6 +170,28 @@ def notify_order_event(
     if order is None:
         return
 
+    origin = resolve_order_event_origin(
+        str(payload.get("original_event_name") or ""),
+        payload,
+        actor.id if actor else None,
+    )
+    change_labels = _resolve_order_change_labels(
+        event_name=event_name,
+        event_id=event_id,
+        team_id=team_id,
+        order_id=order_id,
+        payload=payload,
+        origin=origin,
+    )
+    payload = {
+        **payload,
+        "notification_origin": origin,
+        "notification_change_labels": change_labels,
+    }
+    actor_role = _resolve_actor_role_label(actor, team_id)
+    subject_label = _build_order_label(order)
+    focus_event_id = _resolve_order_focus_event_id(event_name=event_name, event_id=event_id, payload=payload)
+
     admin_recipients = resolve_admin_notification_recipients(team_id=team_id, actor_user_id=actor.id if actor else None)
     driver_recipients = resolve_driver_notification_recipients(
         team_id=team_id,
@@ -163,6 +209,7 @@ def notify_order_event(
             route_id=recipient.get("route_id"),
             entity_type="order",
             entity_id=order_id,
+            order_event_id=focus_event_id,
         )
         if target is None:
             continue
@@ -176,7 +223,9 @@ def notify_order_event(
             entity_id=order_id,
             team_id=team_id,
             actor=actor,
-            title=_build_notification_title(event_name),
+            actor_kind=origin,
+            actor_role=actor_role,
+            title=_build_order_notification_title(event_name, origin),
             description=_build_notification_description(
                 event_name=event_name,
                 order=order,
@@ -185,6 +234,8 @@ def notify_order_event(
             occurred_at=occurred_iso,
             target=target,
             related_ids=_build_related_ids(payload=payload, order_id=order_id),
+            subject_label=subject_label,
+            change_labels=change_labels,
         )
         _store_and_emit_notification(recipient["user_id"], recipient["app_scope"], notification)
 
@@ -281,6 +332,7 @@ def notify_app_event(
         ),
     ]
     occurred_iso = _to_iso_string(occurred_at)
+    actor_role = _resolve_actor_role_label(actor, team_id)
 
     for recipient in recipients:
         target = _build_notification_target(
@@ -304,6 +356,7 @@ def notify_app_event(
             entity_id=entity_id,
             team_id=team_id,
             actor=actor,
+            actor_role=actor_role,
             title=_build_notification_title(event_name),
             description=_build_notification_description(
                 event_name=event_name,
@@ -358,6 +411,7 @@ def notify_delivery_planning_event(
         recipients,
     )
     occurred_iso = _to_iso_string(occurred_at)
+    actor_role = _resolve_actor_role_label(actor, team_id)
 
     for recipient in recipients:
         target = _build_notification_target(
@@ -381,6 +435,7 @@ def notify_delivery_planning_event(
             entity_id=entity_id,
             team_id=team_id,
             actor=actor,
+            actor_role=actor_role,
             title=_build_notification_title(event_name),
             description=_build_notification_description(
                 event_name=event_name,
@@ -545,6 +600,10 @@ def build_notification_item(
     occurred_at: str,
     target: dict,
     related_ids: dict | None = None,
+    actor_kind: str | None = None,
+    actor_role: str | None = None,
+    subject_label: str | None = None,
+    change_labels: list[str] | None = None,
 ) -> dict:
     notification_id = _build_notification_id(event_id=event_id, recipient_user_id=recipient_user_id, app_scope=app_scope)
     payload = {
@@ -556,12 +615,19 @@ def build_notification_item(
         "team_id": team_id,
         "actor_user_id": actor.id if actor and isinstance(actor.id, int) else None,
         "actor_username": _resolve_actor_username(actor),
+        "actor_kind": actor_kind or (ORDER_EVENT_ORIGIN_USER if actor else ORDER_EVENT_ORIGIN_SYSTEM),
+        "actor_role": actor_role,
         "title": title,
         "description": description,
         "occurred_at": occurred_at,
         "target": target,
         "read": False,
     }
+    if subject_label:
+        payload["subject_label"] = subject_label
+    if change_labels:
+        payload["change_labels"] = change_labels[:NOTIFICATION_CHANGE_LABEL_LIMIT]
+        payload["change_count"] = len(change_labels)
     if related_ids:
         payload.update({key: value for key, value in related_ids.items() if value is not None})
     return payload
@@ -626,6 +692,12 @@ def _build_notification_title(event_name: str) -> str:
         "route_solution_stop.updated": "Route stop updated",
     }
     return mapping.get(event_name, "New update")
+
+
+def _build_order_notification_title(event_name: str, origin: str) -> str:
+    if event_name == ORDER_UPDATED_NOTIFICATION_EVENT_NAME and origin == ORDER_EVENT_ORIGIN_CLIENT:
+        return "Client form submitted"
+    return _build_notification_title(event_name)
 
 
 _DescriptionBuilder = Callable[[Order | None, dict], str]
@@ -770,6 +842,22 @@ def _build_notification_description(*, event_name: str, order: Order | None, pay
 
 
 def _build_order_updated_description(*, order_label: str, payload: dict) -> str:
+    labels = payload.get("notification_change_labels")
+    change_summary = summarize_change_labels(labels if isinstance(labels, list) else [])
+    origin = payload.get("notification_origin") or resolve_order_event_origin(
+        str(payload.get("original_event_name") or ""),
+        payload,
+        _parse_int(payload.get("actor_id")),
+    )
+
+    if origin == ORDER_EVENT_ORIGIN_CLIENT:
+        if change_summary:
+            return f"Client submitted the form for {order_label} and updated {change_summary}."
+        return f"Client submitted the form for {order_label}."
+
+    if change_summary:
+        return f"{order_label} updated: {change_summary}."
+
     changed_sections = payload.get("changed_sections")
     if not isinstance(changed_sections, list):
         return f"{order_label} was updated."
@@ -885,6 +973,7 @@ def _build_notification_target(
     route_id: int | None,
     entity_type: str | None,
     entity_id: int | None,
+    order_event_id: str | None = None,
 ) -> dict | None:
     order_id = order.id if order and isinstance(order.id, int) else _parse_int(payload.get("order_id"))
     order_case_id = _parse_int(payload.get("order_case_id"))
@@ -954,10 +1043,13 @@ def _build_notification_target(
         }
 
     if event_name in {"order.created", "order.updated", "order.state_changed"} and order_id is not None:
+        params = {"orderId": order_id}
+        if order_event_id:
+            params["orderEventId"] = order_event_id
         return {
             "kind": "order_detail",
             "route": "/",
-            "params": {"orderId": order_id},
+            "params": params,
         }
 
     if event_name in {"order_case.created", "order_case.updated", "order_case.state_changed"} and order_case_id is not None:
@@ -1156,6 +1248,54 @@ def _parse_int(value: object) -> int | None:
     if isinstance(value, str) and value.isdigit():
         return int(value)
     return None
+
+
+def _resolve_order_change_labels(
+    *,
+    event_name: str,
+    event_id: str,
+    team_id: int,
+    order_id: int,
+    payload: dict,
+    origin: str,
+) -> list[str]:
+    """What an order update changed, as short field labels. A client form's
+    changes live on its submission event, which the edit points at; for those
+    only corrections count, mirroring the order's event history."""
+    if event_name != ORDER_UPDATED_NOTIFICATION_EVENT_NAME:
+        return []
+    audit_event_id = payload.get("audit_event_id")
+    rows = list_order_event_audit_changes(
+        team_id=team_id,
+        order_id=order_id,
+        event_id=audit_event_id if isinstance(audit_event_id, str) and audit_event_id else event_id,
+    )
+    return label_order_changes(
+        rows,
+        replacements_only=origin == ORDER_EVENT_ORIGIN_CLIENT,
+    )
+
+
+def _resolve_order_focus_event_id(*, event_name: str, event_id: str, payload: dict) -> str | None:
+    """The history entry a tap should land on. A client submission's entry is
+    its CLIENT_FORM_SUBMITTED event — the edit that notified is hidden there."""
+    if event_name not in ORDER_EVENT_FOCUS_NOTIFICATION_EVENT_NAMES:
+        return None
+    audit_event_id = payload.get("audit_event_id")
+    if isinstance(audit_event_id, str) and audit_event_id:
+        return audit_event_id
+    return event_id
+
+
+def _resolve_actor_role_label(actor: User | None, team_id: int | None) -> str | None:
+    if actor is None:
+        return None
+    role_id = resolve_user_role_id_for_team(actor, team_id)
+    role = db.session.get(UserRole, role_id) if role_id is not None else None
+    if role is None:
+        return None
+    serialized = serialize_user_actor(actor, role)
+    return serialized["role_name"] or serialized["base_role"]
 
 
 def _resolve_actor_username(actor: User | None) -> str | None:

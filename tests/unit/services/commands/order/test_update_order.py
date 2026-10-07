@@ -310,6 +310,8 @@ def test_linked_device_submission_is_recorded_as_the_customers(monkeypatch):
     # The changes belong to the submission, not to the realtime edit event.
     assert recorded[0]["event_id"] == events[1]["event_id"]
     assert "event_id" not in events[0]
+    # ...and the edit points at them, so its notification can say what changed.
+    assert events[0]["payload"]["audit_event_id"] == events[1]["event_id"]
     assert order.client_form_submitted_at is not None
 
 

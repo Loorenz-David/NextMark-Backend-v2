@@ -1,3 +1,4 @@
+from .change_labels import label_order_changes, summarize_change_labels
 from .changes import (
     ENTITY_ITEM,
     ENTITY_NOTE,
@@ -35,7 +36,9 @@ __all__ = [
     "diff_order_audit_values",
     "item_created_change",
     "item_deleted_change",
+    "label_order_changes",
     "normalize_audit_notes",
     "snapshot_item_audit_values",
     "snapshot_order_audit_values",
+    "summarize_change_labels",
 ]

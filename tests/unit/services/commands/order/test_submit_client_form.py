@@ -69,6 +69,7 @@ def test_submit_client_form_persists_allowed_fields_and_emits_submission_events(
     # The changes belong to the submission, not to the realtime edit event.
     assert "event_id" not in emitted_events[0]
     assert audit_records[0]["event_id"] == emitted_events[1]["event_id"]
+    assert emitted_events[0]["payload"]["audit_event_id"] == emitted_events[1]["event_id"]
     assert sorted(
         (change.field_name, change.from_value, change.to_value)
         for change in audit_records[0]["changes"]

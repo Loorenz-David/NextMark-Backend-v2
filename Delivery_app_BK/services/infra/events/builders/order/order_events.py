@@ -42,10 +42,15 @@ def build_order_edited_event(
     order_instance: Order,
     *,
     changed_sections: list[str] | None = None,
+    audit_event_id: str | None = None,
 ) -> dict:
+    """`audit_event_id` points at a sibling event that owns this edit's audit
+    rows (a client form submission), so readers of the edit can find them."""
     payload = {}
     if changed_sections:
         payload["changed_sections"] = changed_sections
+    if audit_event_id:
+        payload["audit_event_id"] = audit_event_id
 
     return {
         "order_id": order_instance.id,

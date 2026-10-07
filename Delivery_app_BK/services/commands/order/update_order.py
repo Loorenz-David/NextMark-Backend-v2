@@ -311,10 +311,16 @@ def _build_order_update_events(
     identity carries the CUSTOMER section instead, which is what pushes the
     change to Shopify.
     """
+    submitted_event = None
     if submission_source is not None:
+        # The customer's changes belong to their submission; the companion edit
+        # event only carries the realtime "order updated" frame.
+        submitted_event = build_client_form_submitted_event(order)
+        submitted_event["event_id"] = new_audit_event_id()
         edit_event = build_order_edited_event(
             order_instance=order,
             changed_sections=[ORDER_EDIT_SECTION_CLIENT_FORM],
+            audit_event_id=submitted_event["event_id"],
         )
     elif changed_sections:
         sections = list(changed_sections)
@@ -346,7 +352,7 @@ def _build_order_update_events(
     else:
         return []
 
-    if submission_source is None:
+    if submitted_event is None:
         edit_event["event_id"] = new_audit_event_id()
         record_order_audit_changes(
             ctx,
@@ -357,10 +363,6 @@ def _build_order_update_events(
         )
         return [edit_event]
 
-    # The customer's changes belong to their submission; the companion edit
-    # event only carries the realtime "order updated" frame.
-    submitted_event = build_client_form_submitted_event(order)
-    submitted_event["event_id"] = new_audit_event_id()
     record_order_audit_changes(
         ctx,
         order_id=order.id,

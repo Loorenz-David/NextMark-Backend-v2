@@ -137,6 +137,7 @@ def submit_client_form(token: str, payload: dict) -> dict:
             build_order_edited_event(
                 order,
                 changed_sections=["client_form_submission"],
+                audit_event_id=submitted_event["event_id"],
             ),
             submitted_event,
         ],
