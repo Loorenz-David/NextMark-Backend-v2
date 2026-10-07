@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from Delivery_app_BK.services.plan_types.registry import get_plan_type_module
+
 from ....context import ServiceContext
 from ..extensions import merge_bundle_map, wrap_post_flush_action
-from .registry import resolve_update_extension_handler
 from .types import OrderUpdateDelta, OrderUpdateExtensionContext, OrderUpdateExtensionResult
 
 
@@ -32,10 +33,10 @@ def apply_order_update_extensions(
         grouped_deltas[plan_type].append(delta)
 
     for plan_type, grouped in grouped_deltas.items():
-        handler = resolve_update_extension_handler(plan_type)
-        if not handler:
+        plan_type_module = get_plan_type_module(plan_type)
+        if plan_type_module is None:
             continue
-        partial = handler(ctx, grouped, extension_context)
+        partial = plan_type_module.apply_order_update(ctx, grouped, extension_context)
         result.instances.extend(partial.instances or [])
         merge_bundle_map(result.bundle_by_order_id, partial.bundle_by_order_id or {})
 

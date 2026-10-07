@@ -10,31 +10,10 @@ from Delivery_app_BK.models import (
     db,
 )
 
+from Delivery_app_BK.services.plan_types.registry import get_plan_type_module
+
 from ....context import ServiceContext
-from ...international_shipping_app.apply_order_plan_change import (
-    apply_order_plan_change as apply_international_shipping_plan_change,
-)
-from ...store_pickup_app.apply_order_plan_change import (
-    apply_order_plan_change as apply_store_pickup_plan_change,
-)
-from .route_plan_change import apply_route_plan_change
 from .types import PlanChangeApplyContext, PlanChangeResult
-
-
-PlanChangeHandler = Callable[
-    [ServiceContext, object, RoutePlan | None, RoutePlan | None, PlanChangeApplyContext],
-    PlanChangeResult,
-]
-
-
-# Which planning domain owns the per-order artifacts on each side of a move.
-# International shipping and store pickup are registered as no-ops today; they
-# gain real handlers when those domains grow artifacts of their own.
-PLAN_CHANGE_HANDLERS: dict[str, PlanChangeHandler] = {
-    "local_delivery": apply_route_plan_change,
-    "international_shipping": apply_international_shipping_plan_change,
-    "store_pickup": apply_store_pickup_plan_change,
-}
 
 
 def apply_order_plan_change(
@@ -56,12 +35,12 @@ def apply_order_plan_change(
     # splitting them would emit two competing resequencing actions.
     results: list[PlanChangeResult] = []
     for plan_type in _ordered_unique(old_plan_type, new_plan_type):
-        handler = PLAN_CHANGE_HANDLERS.get(plan_type)
-        if handler is None:
+        plan_type_module = get_plan_type_module(plan_type)
+        if plan_type_module is None:
             continue
 
         results.append(
-            handler(
+            plan_type_module.apply_plan_change(
                 ctx,
                 order_instance,
                 old_plan if old_plan_type == plan_type else None,

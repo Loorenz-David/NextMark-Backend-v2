@@ -1,6 +1,6 @@
 from Delivery_app_BK.models import Order, db
-from Delivery_app_BK.services.domain.route_operations.plan.route_freshness import get_route_freshness_updated_at
 from Delivery_app_BK.services.domain.order.order_events import OrderEvent as StoredOrderEventName
+from Delivery_app_BK.services.plan_types.registry import get_plan_type_module
 from Delivery_app_BK.sockets.contracts.realtime import (
     BUSINESS_EVENT_ORDER_CREATED,
     BUSINESS_EVENT_ORDER_STATE_CHANGED,
@@ -34,15 +34,18 @@ def fanout_order_event(event_row) -> None:
         return
 
     order = db.session.get(Order, event_row.order_id) if event_row.order_id else None
-    route_freshness_updated_at = get_route_freshness_updated_at(getattr(order, "route_plan", None)) if order else None
+    route_plan = getattr(order, "route_plan", None) if order else None
     payload = {
         "order_id": event_row.order_id,
         "actor_id": event_row.actor_id,
         "original_event_name": event_row.event_name,
         **(event_row.payload or {}),
     }
-    if route_freshness_updated_at is not None:
-        payload["route_freshness_updated_at"] = route_freshness_updated_at
+    # Each plan type adds what its own clients need; route freshness, for one,
+    # means nothing outside local delivery.
+    plan_type_module = get_plan_type_module(getattr(route_plan, "plan_type", None))
+    if plan_type_module is not None:
+        payload.update(plan_type_module.build_order_realtime_extras(route_plan))
 
     route_ids = resolve_route_ids_for_order(event_row.order_id, event_row.team_id)
     driver_event_name = (

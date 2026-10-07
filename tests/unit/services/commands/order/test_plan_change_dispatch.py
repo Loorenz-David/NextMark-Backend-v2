@@ -18,8 +18,23 @@ from Delivery_app_BK.services.commands.order.plan_objectives.types import (
 )
 
 
+PLAN_TYPES = ("local_delivery", "international_shipping", "store_pickup")
+
+
 def _plan(plan_id: int, plan_type: str):
     return SimpleNamespace(id=plan_id, plan_type=plan_type)
+
+
+def _register_plan_change_handlers(monkeypatch, handlers):
+    monkeypatch.setattr(
+        module,
+        "get_plan_type_module",
+        lambda plan_type: (
+            SimpleNamespace(apply_plan_change=handlers[plan_type])
+            if plan_type in handlers
+            else None
+        ),
+    )
 
 
 def _recording_handlers(monkeypatch):
@@ -39,10 +54,9 @@ def _recording_handlers(monkeypatch):
 
         return _handler
 
-    monkeypatch.setattr(
-        module,
-        "PLAN_CHANGE_HANDLERS",
-        {plan_type: _make(plan_type) for plan_type in module.PLAN_CHANGE_HANDLERS},
+    _register_plan_change_handlers(
+        monkeypatch,
+        {plan_type: _make(plan_type) for plan_type in PLAN_TYPES},
     )
     return calls
 
@@ -128,9 +142,8 @@ def test_merged_result_collects_instances_and_bundles_from_both_domains(monkeypa
             bundle_serializer=lambda: {"shipments": ["b"]},
         )
 
-    monkeypatch.setattr(
-        module,
-        "PLAN_CHANGE_HANDLERS",
+    _register_plan_change_handlers(
+        monkeypatch,
         {"local_delivery": _local, "international_shipping": _international},
     )
 
@@ -180,8 +193,10 @@ def test_legacy_objective_alias_still_matches_local_delivery(monkeypatch):
     # rather than read as a contradiction against a local delivery plan.
     monkeypatch.setattr(
         objective_module,
-        "PLAN_OBJECTIVE_HANDLERS",
-        {"local_delivery": lambda *_args: PlanObjectiveCreateResult()},
+        "get_plan_type_module",
+        lambda plan_type: SimpleNamespace(
+            apply_objective=lambda *_args: PlanObjectiveCreateResult()
+        ),
     )
     order = SimpleNamespace(order_plan_objective="route_operations")
 

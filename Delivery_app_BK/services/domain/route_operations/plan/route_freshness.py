@@ -53,3 +53,11 @@ def get_route_freshness_updated_at(route_plan: RoutePlan | None) -> str | None:
         return None
 
     return route_plan.updated_at.isoformat()
+
+
+def build_order_route_freshness_extras(route_plan: RoutePlan | None) -> dict[str, str]:
+    route_freshness_updated_at = get_route_freshness_updated_at(route_plan)
+    if route_freshness_updated_at is None:
+        return {}
+
+    return {"route_freshness_updated_at": route_freshness_updated_at}

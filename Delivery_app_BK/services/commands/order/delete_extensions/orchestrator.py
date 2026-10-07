@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from Delivery_app_BK.services.plan_types.registry import get_plan_type_module
+
 from ....context import ServiceContext
 from ..extensions import wrap_post_flush_action
-from .registry import resolve_delete_extension_handler
 from .types import OrderDeleteDelta, OrderDeleteExtensionContext, OrderDeleteExtensionResult
 
 
@@ -25,10 +26,10 @@ def apply_order_delete_extensions(
         grouped[plan_type].append(delta)
 
     for plan_type, grouped_deltas in grouped.items():
-        handler = resolve_delete_extension_handler(plan_type)
-        if not handler:
+        plan_type_module = get_plan_type_module(plan_type)
+        if plan_type_module is None:
             continue
-        partial = handler(ctx, grouped_deltas, extension_context)
+        partial = plan_type_module.apply_order_delete(ctx, grouped_deltas, extension_context)
         result.instances.extend(partial.instances or [])
         result.updated_bundles.extend(partial.updated_bundles or [])
 

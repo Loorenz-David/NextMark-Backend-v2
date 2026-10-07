@@ -1,32 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from Delivery_app_BK.errors import ValidationFailed
 from Delivery_app_BK.models import RoutePlan, Order
 from Delivery_app_BK.services.domain.order.plan_objective_labels import (
     normalize_order_plan_objective,
 )
+from Delivery_app_BK.services.plan_types.registry import get_plan_type_module
 from Delivery_app_BK.services.queries.get_instance import get_instance
 
 from ....context import ServiceContext
-from ...local_delivery_app import apply_order_objective as apply_local_delivery_objective
-from ...store_pickup_app import apply_order_objective as apply_store_pickup_objective
-from ...international_shipping_app import apply_order_objective as apply_international_shipping_objective
 from .types import PlanObjectiveCreateResult
-
-
-PlanObjectiveHandler = Callable[
-    [ServiceContext, Order, RoutePlan, str],
-    PlanObjectiveCreateResult,
-]
-
-
-PLAN_OBJECTIVE_HANDLERS = {
-    "local_delivery": apply_local_delivery_objective,
-    "store_pickup": apply_store_pickup_objective,
-    "international_shipping": apply_international_shipping_objective,
-}
 
 
 def apply_order_plan_objective(
@@ -63,10 +46,10 @@ def apply_order_plan_objective(
 
     order_instance.order_plan_objective = effective_objective
 
-    handler: PlanObjectiveHandler | None = PLAN_OBJECTIVE_HANDLERS.get(
-        effective_objective
-    )
-    if not handler:
+    plan_type_module = get_plan_type_module(effective_objective)
+    if plan_type_module is None:
         return PlanObjectiveCreateResult()
 
-    return handler(ctx, order_instance, route_plan, effective_objective)
+    return plan_type_module.apply_objective(
+        ctx, order_instance, route_plan, effective_objective
+    )
