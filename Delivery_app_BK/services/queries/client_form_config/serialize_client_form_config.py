@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional
 
 from Delivery_app_BK.models import (
     ClientFormMedia,
+    ClientFormRedirect,
     ClientFormRule,
     ClientFormSettings,
     ClientFormTermsVersion,
@@ -89,3 +90,20 @@ def serialize_client_form_media_item(instance: ClientFormMedia) -> Dict[str, Any
 def serialize_client_form_media(instances: List[ClientFormMedia], ctx: ServiceContext):
     unpacked = [serialize_client_form_media_item(instance) for instance in instances]
     return map_return_values(unpacked, ctx, "client_form_media")
+
+
+def serialize_client_form_redirect(instance: ClientFormRedirect) -> Dict[str, Any]:
+    return {
+        "id": instance.id,
+        "client_id": instance.client_id,
+        "label": instance.label,
+        "url": instance.url,
+        "is_active": instance.is_active,
+        "created_at": instance.created_at.isoformat() if instance.created_at else None,
+        "updated_at": instance.updated_at.isoformat() if instance.updated_at else None,
+    }
+
+
+def serialize_client_form_redirects(instances: List[ClientFormRedirect], ctx: ServiceContext):
+    unpacked = [serialize_client_form_redirect(instance) for instance in instances]
+    return map_return_values(unpacked, ctx, "client_form_redirect")

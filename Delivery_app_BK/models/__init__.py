@@ -76,3 +76,4 @@ from .tables.client_form.client_form_settings import ClientFormSettings
 from .tables.client_form.client_form_terms_version import ClientFormTermsVersion
 from .tables.client_form.client_form_rule import ClientFormRule
 from .tables.client_form.client_form_media import ClientFormMedia
+from .tables.client_form.client_form_redirect import ClientFormRedirect

@@ -39,6 +39,6 @@ def validate_and_get_order(token: str) -> Order:
         raise TokenExpiredError()
 
     if order.client_form_submitted_at is not None:
-        raise TokenAlreadyUsedError()
+        raise TokenAlreadyUsedError(team_id=order.team_id)
 
     return order

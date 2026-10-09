@@ -92,7 +92,7 @@ def _get_client_form_response(token: str):
         data = get_client_form_data(token)
         return jsonify(data), 200
     except TokenAlreadyUsedError as e:
-        return jsonify({"error": e.message, "code": e.code}), 409
+        return jsonify({"error": e.message, "code": e.code, **e.extra}), 409
     except TokenExpiredError as e:
         return jsonify({"error": e.message, "code": e.code}), 410
     except TokenInvalidError as e:
@@ -107,7 +107,7 @@ def _submit_client_form_response(token: str):
         result = submit_client_form(token, payload)
         return jsonify(result), 200
     except TokenAlreadyUsedError as e:
-        return jsonify({"error": e.message, "code": e.code}), 409
+        return jsonify({"error": e.message, "code": e.code, **e.extra}), 409
     except TokenExpiredError as e:
         return jsonify({"error": e.message, "code": e.code}), 410
     except TokenInvalidError as e:

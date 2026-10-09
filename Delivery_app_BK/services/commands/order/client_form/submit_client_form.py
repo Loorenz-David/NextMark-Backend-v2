@@ -12,13 +12,13 @@ Side effects:
 - Emits an order event through the outbox so realtime subscribers receive
     the standard business envelope (`realtime:event`).
 
-Returns: { "success": True }
+Returns: { "success": True, "redirect": {"url", "host"} | None }
 Raises: TokenInvalidError | TokenExpiredError | TokenAlreadyUsedError | ValidationError
 """
 
 from datetime import datetime, timezone
 
-from Delivery_app_BK.errors import ValidationFailed
+from Delivery_app_BK.errors import TokenAlreadyUsedError, ValidationFailed
 from Delivery_app_BK.models import db
 from Delivery_app_BK.services.commands.order.client_form._resolve_terms_acceptance import (
     resolve_terms_acceptance,
@@ -44,6 +44,9 @@ from Delivery_app_BK.services.infra.events.builders.order import (
     build_order_edited_event,
 )
 from Delivery_app_BK.services.infra.events.emiters.order import emit_order_events
+from Delivery_app_BK.services.queries.client_form_config.resolve_public_redirect import (
+    resolve_public_redirect,
+)
 from Delivery_app_BK.services.commands.route_plan.local_delivery.arrival_tracking import (
     collect_arrival_changes,
     snapshot_route_arrivals,
@@ -62,11 +65,19 @@ AUDIT_FIELDS = (*sorted(ALLOWED_CLIENT_FIELDS), "order_notes")
 
 
 def submit_client_form(token: str, payload: dict) -> dict:
-    order = validate_and_get_order(token)
+    try:
+        order = validate_and_get_order(token)
+    except TokenAlreadyUsedError as e:
+        e.extra = {"redirect": resolve_public_redirect(e.team_id) if e.team_id is not None else None}
+        raise
     note_payload = payload.get("order_notes") if isinstance(payload, dict) else None
 
     # Validated against the team's active version before anything is written.
     accepted_terms = resolve_terms_acceptance(order.team_id, payload)
+
+    # Resolved before anything is written: a failure here must fail the whole
+    # submit, not turn a saved submission into an error the customer retries.
+    redirect = resolve_public_redirect(order.team_id)
 
     # Sanitize — only write allowed fields
     safe_payload = {k: v for k, v in payload.items() if k in ALLOWED_CLIENT_FIELDS}
@@ -151,4 +162,4 @@ def submit_client_form(token: str, payload: dict) -> dict:
         ],
     )
 
-    return {"success": True}
+    return {"success": True, "redirect": redirect}

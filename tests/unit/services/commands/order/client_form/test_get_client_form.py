@@ -185,3 +185,24 @@ def test_get_client_form_data_scopes_config_to_the_token_resolved_team(monkeypat
     module.get_client_form_data("token123")
 
     assert requested_team_ids == [55]
+
+
+def test_get_client_form_data_attaches_redirect_when_token_already_used(monkeypatch):
+    import pytest
+
+    from Delivery_app_BK.errors import TokenAlreadyUsedError
+
+    def _used(token):
+        raise TokenAlreadyUsedError(team_id=7)
+
+    monkeypatch.setattr(module, "validate_and_get_order", _used)
+    monkeypatch.setattr(
+        module,
+        "resolve_public_redirect",
+        lambda team_id: {"url": "https://acme.se", "host": "acme.se"} if team_id == 7 else None,
+    )
+
+    with pytest.raises(TokenAlreadyUsedError) as exc:
+        module.get_client_form_data("used-token")
+
+    assert exc.value.extra == {"redirect": {"url": "https://acme.se", "host": "acme.se"}}

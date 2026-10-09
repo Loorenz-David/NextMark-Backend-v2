@@ -30,6 +30,11 @@ def _no_terms_configured(monkeypatch):
     monkeypatch.setattr(module, "resolve_terms_acceptance", lambda team_id, payload: None)
 
 
+@pytest.fixture(autouse=True)
+def _no_redirect_configured(monkeypatch):
+    monkeypatch.setattr(module, "resolve_public_redirect", lambda team_id: None)
+
+
 def test_submit_client_form_persists_allowed_fields_and_emits_submission_events(monkeypatch, audit_records):
     order = SimpleNamespace(
         id=42,
@@ -54,7 +59,7 @@ def test_submit_client_form_persists_allowed_fields_and_emits_submission_events(
         },
     )
 
-    assert result == {"success": True}
+    assert result == {"success": True, "redirect": None}
     assert order.client_email == "new@example.com"
     assert order.client_primary_phone == {"prefix": "+46", "number": "2020203"}
     assert not hasattr(order, "unexpected_field")
@@ -229,3 +234,44 @@ def test_submit_initializes_order_notes_list_when_missing(monkeypatch):
     )
 
     assert order.order_notes == [{"type": "COSTUMER", "content": "first note"}]
+
+
+def test_submit_client_form_returns_team_redirect(monkeypatch):
+    order = SimpleNamespace(
+        id=42,
+        team_id=7,
+        client_email="old@example.com",
+        client_form_token_encrypted="encrypted-token",
+        client_form_submitted_at=None,
+    )
+    monkeypatch.setattr(module, "validate_and_get_order", lambda token: order)
+    monkeypatch.setattr(module, "emit_order_events", lambda ctx, events: None)
+    monkeypatch.setattr(module.db.session, "commit", lambda: None)
+    monkeypatch.setattr(
+        module,
+        "resolve_public_redirect",
+        lambda team_id: {"url": "https://acme.se/ty", "host": "acme.se"} if team_id == 7 else None,
+    )
+
+    result = module.submit_client_form("valid-token", {"client_email": "new@example.com"})
+
+    assert result == {"success": True, "redirect": {"url": "https://acme.se/ty", "host": "acme.se"}}
+
+
+def test_submit_client_form_attaches_redirect_when_token_already_used(monkeypatch):
+    from Delivery_app_BK.errors import TokenAlreadyUsedError
+
+    def _used(token):
+        raise TokenAlreadyUsedError(team_id=7)
+
+    monkeypatch.setattr(module, "validate_and_get_order", _used)
+    monkeypatch.setattr(
+        module,
+        "resolve_public_redirect",
+        lambda team_id: {"url": "https://acme.se", "host": "acme.se"},
+    )
+
+    with pytest.raises(TokenAlreadyUsedError) as exc:
+        module.submit_client_form("used-token", {})
+
+    assert exc.value.extra == {"redirect": {"url": "https://acme.se", "host": "acme.se"}}

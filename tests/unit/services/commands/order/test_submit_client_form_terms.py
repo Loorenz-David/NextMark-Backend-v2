@@ -37,6 +37,11 @@ def _isolate_side_effects(monkeypatch):
     monkeypatch.setattr(module.db.session, "commit", lambda: None)
 
 
+@pytest.fixture(autouse=True)
+def _no_redirect_configured(monkeypatch):
+    monkeypatch.setattr(module, "resolve_public_redirect", lambda team_id: None)
+
+
 def test_submit_stamps_accepted_terms_version(monkeypatch):
     order = _order()
     accepted = SimpleNamespace(id=12, version_number=4)
@@ -48,7 +53,7 @@ def test_submit_stamps_accepted_terms_version(monkeypatch):
         "valid-token", {"client_email": "new@example.com", "accepted_terms_version_id": 12}
     )
 
-    assert result == {"success": True}
+    assert result == {"success": True, "redirect": None}
     assert order.accepted_terms_version_id == 12
     assert order.terms_accepted_at is not None
     assert order.terms_accepted_at == order.client_form_submitted_at

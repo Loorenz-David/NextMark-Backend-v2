@@ -16,6 +16,10 @@
     GET / PUT / PATCH / DELETE  /api_v2/client_form_config/media
     POST                        /api_v2/client_form_config/media/reorder
 
+  Post-submit redirect pages (at most one active):
+    GET / PUT / PATCH / DELETE  /api_v2/client_form_config/redirects
+    POST                        /api_v2/client_form_config/redirects/activate
+
 The public form never calls these — it receives its configuration through the
 token-authenticated client-form endpoint in `client_form.py`.
 """
@@ -25,14 +29,23 @@ from flask_jwt_extended import get_jwt, jwt_required
 
 from Delivery_app_BK.routers.http.response import Response
 from Delivery_app_BK.routers.utils.role_decorator import ADMIN, ASSISTANT, role_required
+from Delivery_app_BK.services.commands.client_form_config.activate_client_form_redirect import (
+    activate_client_form_redirect as activate_client_form_redirect_service,
+)
 from Delivery_app_BK.services.commands.client_form_config.create_client_form_media import (
     create_client_form_media as create_client_form_media_service,
+)
+from Delivery_app_BK.services.commands.client_form_config.create_client_form_redirect import (
+    create_client_form_redirect as create_client_form_redirect_service,
 )
 from Delivery_app_BK.services.commands.client_form_config.create_client_form_rule import (
     create_client_form_rule as create_client_form_rule_service,
 )
 from Delivery_app_BK.services.commands.client_form_config.delete_client_form_media import (
     delete_client_form_media as delete_client_form_media_service,
+)
+from Delivery_app_BK.services.commands.client_form_config.delete_client_form_redirect import (
+    delete_client_form_redirect as delete_client_form_redirect_service,
 )
 from Delivery_app_BK.services.commands.client_form_config.delete_client_form_rule import (
     delete_client_form_rule as delete_client_form_rule_service,
@@ -49,6 +62,9 @@ from Delivery_app_BK.services.commands.client_form_config.reorder_client_form_ru
 from Delivery_app_BK.services.commands.client_form_config.update_client_form_media import (
     update_client_form_media as update_client_form_media_service,
 )
+from Delivery_app_BK.services.commands.client_form_config.update_client_form_redirect import (
+    update_client_form_redirect as update_client_form_redirect_service,
+)
 from Delivery_app_BK.services.commands.client_form_config.update_client_form_rule import (
     update_client_form_rule as update_client_form_rule_service,
 )
@@ -64,6 +80,9 @@ from Delivery_app_BK.services.queries.client_form_config.get_client_form_setting
 )
 from Delivery_app_BK.services.queries.client_form_config.list_client_form_media import (
     list_client_form_media as list_client_form_media_service,
+)
+from Delivery_app_BK.services.queries.client_form_config.list_client_form_redirects import (
+    list_client_form_redirects as list_client_form_redirects_service,
 )
 from Delivery_app_BK.services.queries.client_form_config.list_client_form_rules import (
     list_client_form_rules as list_client_form_rules_service,
@@ -229,3 +248,40 @@ def delete_client_form_media():
 @role_required([ADMIN, ASSISTANT])
 def reorder_client_form_media():
     return _run_command(reorder_client_form_media_service)
+
+
+# ── Post-submit redirect ───────────────────────────────────────────────────────
+
+@client_form_config_bp.route("/redirects", methods=["GET"])
+@jwt_required()
+@role_required([ADMIN, ASSISTANT])
+def list_client_form_redirects():
+    return _run_query(list_client_form_redirects_service)
+
+
+@client_form_config_bp.route("/redirects", methods=["PUT"])
+@jwt_required()
+@role_required([ADMIN, ASSISTANT])
+def create_client_form_redirect():
+    return _run_command(create_client_form_redirect_service)
+
+
+@client_form_config_bp.route("/redirects", methods=["PATCH"])
+@jwt_required()
+@role_required([ADMIN, ASSISTANT])
+def update_client_form_redirect():
+    return _run_command(update_client_form_redirect_service, return_data=False)
+
+
+@client_form_config_bp.route("/redirects", methods=["DELETE"])
+@jwt_required()
+@role_required([ADMIN, ASSISTANT])
+def delete_client_form_redirect():
+    return _run_command(delete_client_form_redirect_service, return_data=False)
+
+
+@client_form_config_bp.route("/redirects/activate", methods=["POST"])
+@jwt_required()
+@role_required([ADMIN, ASSISTANT])
+def activate_client_form_redirect():
+    return _run_command(activate_client_form_redirect_service)

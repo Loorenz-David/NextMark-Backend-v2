@@ -9,16 +9,27 @@ Security:
 Returns: { "reference_number": str, "external_source": str, "items": [...], "team_name": str,
            "expires_at": str, "route_plan_schedule": {...} | None, "config": {...} }
 Raises: TokenInvalidError | TokenExpiredError | TokenAlreadyUsedError
+         (the latter carries the team's public redirect in `extra`)
 """
+
+from Delivery_app_BK.errors import TokenAlreadyUsedError
 
 from Delivery_app_BK.services.commands.order.client_form._validate_token import validate_and_get_order
 from Delivery_app_BK.services.queries.client_form_config.build_public_client_form_config import (
     build_public_client_form_config,
 )
+from Delivery_app_BK.services.queries.client_form_config.resolve_public_redirect import (
+    resolve_public_redirect,
+)
 
 
 def get_client_form_data(token: str) -> dict:
-    order = validate_and_get_order(token)
+    try:
+        order = validate_and_get_order(token)
+    except TokenAlreadyUsedError as e:
+        # A customer reopening a spent link is offered the team's page again.
+        e.extra = {"redirect": resolve_public_redirect(e.team_id) if e.team_id is not None else None}
+        raise
 
     # Resolve team name; the Order model has a `team` relationship to Team.
     team = getattr(order, "team", None)
