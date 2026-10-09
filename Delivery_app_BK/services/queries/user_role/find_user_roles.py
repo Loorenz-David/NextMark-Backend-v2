@@ -1,4 +1,5 @@
 from typing import Dict, Any
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Query
 
 from Delivery_app_BK.models import db, UserRole
@@ -19,7 +20,12 @@ def find_user_roles(
         params = inject_team_id(params, ctx)
 
     if "team_id" in params:
-        query = query.filter(UserRole.team_id == params.get("team_id"))
+        query = query.filter(
+            or_(
+                UserRole.team_id == params.get("team_id"),
+                and_(UserRole.team_id.is_(None), UserRole.is_system.is_(True)),
+            )
+        )
 
     if "client_id" in params:
         query = query.filter(UserRole.client_id == params.get("client_id"))
